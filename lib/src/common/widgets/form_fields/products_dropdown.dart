@@ -97,7 +97,7 @@ Widget popUpItem(BuildContext context, Map<String, dynamic> item, bool isDisable
           ),
     child: Container(
       decoration: BoxDecoration(
-          color: displayValue == '0' ? const Color.fromARGB(255, 252, 154, 147) : null,
+          color: displayValue == '0' ? const Color.fromARGB(255, 252, 193, 189) : null,
           border: Border.all(width: 1, color: Colors.white)),
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 15),
       child: ListTile(
