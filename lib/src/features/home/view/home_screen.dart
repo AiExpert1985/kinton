@@ -226,7 +226,7 @@ class FastAccessFormButton extends ConsumerWidget {
         ),
       ),
       onPressed: () async {
-        checkTransactionsTotals(ref);
+        // checkTransactionsTotals(ref);
         // first we set pageLoadingNotifier to true, to prevent any side bar button press
         // until initialization is completed
         final pageLoadingNotifier = ref.read(pageIsLoadingNotifier.notifier);
