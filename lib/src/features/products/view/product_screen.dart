@@ -1,5 +1,10 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:pdf/pdf.dart';
+import 'package:printing/printing.dart';
+import 'package:tablets/src/common/functions/debug_print.dart';
 import 'package:tablets/src/common/providers/page_is_loading_notifier.dart';
 import 'package:tablets/src/common/values/features_keys.dart';
 import 'package:tablets/src/common/values/gaps.dart';
@@ -12,6 +17,7 @@ import 'package:tablets/src/features/products/controllers/product_drawer_provide
 import 'package:tablets/src/features/products/controllers/product_form_data_notifier.dart';
 import 'package:tablets/src/features/products/controllers/product_report_controller.dart';
 import 'package:tablets/src/features/products/controllers/product_screen_data_notifier.dart';
+import 'package:tablets/src/features/products/printing/printing_inventory.dart';
 import 'package:tablets/src/features/products/view/product_form.dart';
 import 'package:tablets/generated/l10n.dart';
 import 'package:tablets/src/features/home/view/home_screen.dart';
@@ -222,6 +228,149 @@ class DataRow extends ConsumerWidget {
   }
 }
 
+// this method return List of Maps, in the form {'productName': 'بطيخ احمر', 'productQuantity': 10}
+// filter product if it is hidden, and if it is equal or less than zero
+List<Map<String, dynamic>> _getFilterProductInventory(WidgetRef ref, bool specialReport) {
+  final productDbCache = ref.read(productDbCacheProvider.notifier);
+
+  final screenDataNotifier = ref.read(productScreenDataNotifier.notifier);
+  final screenData = screenDataNotifier.data;
+  tempPrint(screenData.length);
+  List<Map<String, dynamic>> filteredProductInventory = [];
+  for (var productData in screenData) {
+    final productRef = productData[productDbRefKey];
+    final productMap = productDbCache.getItemByDbRef(productRef);
+    final product = Product.fromMap(productMap);
+    final productQuantity = productData[productQuantityKey];
+    if (!specialReport) {
+      filteredProductInventory
+          .add({'productName': product.name, 'productQuantity': productQuantity});
+    } else if (specialReport &&
+        productQuantity > 0 &&
+        product.isHiddenInSpecialReports != null &&
+        !product.isHiddenInSpecialReports!) {
+      filteredProductInventory
+          .add({'productName': product.name, 'productQuantity': productQuantity});
+    } else {
+      errorPrint('error when printing inventory');
+    }
+  }
+  // --- SORTING THE INPUT LIST BY PRODUCT NAME ---
+  // We sort the productMaps list directly.
+  // If you need to preserve the original order of productMaps outside this function,
+  // you should sort a copy: final sortedProductMaps = List<Map<String, dynamic>>.from(productMaps);
+  // and then use sortedProductMaps below. For this function's purpose, sorting in place is fine.
+  filteredProductInventory.sort((a, b) {
+    final aNameObj = a['productName'];
+    final bNameObj = b['productName'];
+
+    // Ensure both are strings for comparison.
+    // Dart's String.compareTo() works well for Arabic alphabetical sorting.
+    if (aNameObj is String && bNameObj is String) {
+      return aNameObj.compareTo(bNameObj);
+    }
+    // Handle cases where one or both might not be strings or are null,
+    // to prevent runtime errors during sort, though the filter below is stricter.
+    else if (aNameObj is String) {
+      return -1; // Valid names come before invalid/null ones
+    } else if (bNameObj is String) {
+      return 1; // Invalid/null names come after valid ones
+    }
+    return 0; // If both are not strings or null, keep their relative order
+  });
+  // --- END OF SORTING ---
+  return filteredProductInventory;
+}
+
+// if sepcialReport = true, then we will hide products, and also hide zero (or less) items
+Future<void> _printProducts(BuildContext context, WidgetRef ref,
+    {bool specialReport = false}) async {
+  try {
+    final myProductsData = _getFilterProductInventory(ref, specialReport);
+    final Uint8List pdfBytes = await ProductListPdfGenerator.generatePdf(
+      myProductsData,
+      reportTitle: "تقرير المخزون",
+    );
+
+    await Printing.layoutPdf(
+        onLayout: (PdfPageFormat format) async => pdfBytes,
+        name: 'product_list_map_${DateTime.now().toIso8601String()}.pdf');
+  } catch (e) {
+    debugPrint("Error generating PDF: $e");
+  }
+}
+
+void _showPrintDialog(BuildContext context, WidgetRef ref) {
+  // Define desired button height, padding and spacing
+  const double buttonHeight = 50.0; // Adjust as needed
+  const EdgeInsets buttonPadding =
+      EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0); // Adjust padding
+  const double spacingBelowButtons = 20.0; // Adjust as needed
+  const double spacingBetweenButtons = 20.0;
+
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return AlertDialog(
+        title: const Text(
+          'اختر نوع الطباعة', // "Choose print type"
+          textAlign: TextAlign.right, // Align title to the right for Arabic
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch, // Make buttons stretch
+          children: <Widget>[
+            const SizedBox(
+              height: 10,
+            ),
+            // Button 1 with increased height and padding
+            SizedBox(
+              height: buttonHeight,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: buttonPadding,
+                ),
+                child: const Text('طباعة جرد شركة جيهان'),
+                onPressed: () {
+                  // Action for "طباعة جرد شركة جيهان"
+                  Navigator.of(context).pop(); // Close the dialog
+                  _printProducts(context, ref, specialReport: true);
+                },
+              ),
+            ),
+            const SizedBox(height: spacingBetweenButtons), // Space between buttons
+
+            // Button 2 with increased height and padding
+            SizedBox(
+              height: buttonHeight,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: buttonPadding,
+                ),
+                child: const Text('طباعة جرد مخزني عام'),
+                onPressed: () {
+                  // Action for "طباعة جرد مخزني عام"
+                  Navigator.of(context).pop(); // Close the dialog
+                  _printProducts(context, ref);
+                },
+              ),
+            ),
+            const SizedBox(height: spacingBelowButtons), // Space below the buttons
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('إلغاء'), // "Cancel"
+            onPressed: () {
+              Navigator.of(context).pop(); // Close the dialog
+            },
+          ),
+        ],
+      );
+    },
+  );
+}
+
 void _showEditProductForm(BuildContext context, WidgetRef ref, Product product) {
   final imagePickerNotifier = ref.read(imagePickerProvider.notifier);
   final formDataNotifier = ref.read(productFormDataProvider.notifier);
@@ -262,11 +411,11 @@ class ProductFloatingButtons extends ConsumerWidget {
       visible: true,
       curve: Curves.bounceInOut,
       children: [
-        // SpeedDialChild(
-        //   child: const Icon(Icons.pie_chart, color: Colors.white),
-        //   backgroundColor: iconsColor,
-        //   onTap: () => drawerController.showReports(context),
-        // ),
+        SpeedDialChild(
+          child: const Icon(Icons.print, color: Colors.white),
+          backgroundColor: iconsColor,
+          onTap: () => _showPrintDialog(context, ref),
+        ),
         SpeedDialChild(
           child: const Icon(Icons.search, color: Colors.white),
           backgroundColor: iconsColor,
