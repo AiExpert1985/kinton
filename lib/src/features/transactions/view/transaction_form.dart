@@ -232,20 +232,20 @@ class TransactionForm extends ConsumerWidget {
         },
         icon: const PrintIcon(),
       ),
-      IconButton(
-        onPressed: () {
-          _onPrintPressed(context, ref, formDataNotifier, isLogoB: true);
-          // if not printed due to empty name, don't continue
-          if (!formDataNotifier.getProperty(isPrintedKey)) return;
-          formNavigation.isReadOnly = true;
-          // TODO navigation to self  is added only to layout rebuild because formNavigation is not stateNotifier
-          // TODO later I might change formNavigation to StateNotifier and watch it in this widget
-          final formData = formDataNotifier.data;
-          onNavigationPressed(formDataNotifier, context, ref, formImagesNotifier, formNavigation,
-              targetTransactionData: formData);
-        },
-        icon: const PrintIconB(),
-      ),
+      // IconButton(
+      //   onPressed: () {
+      //     _onPrintPressed(context, ref, formDataNotifier, isLogoB: true);
+      //     // if not printed due to empty name, don't continue
+      //     if (!formDataNotifier.getProperty(isPrintedKey)) return;
+      //     formNavigation.isReadOnly = true;
+      //     // TODO navigation to self  is added only to layout rebuild because formNavigation is not stateNotifier
+      //     // TODO later I might change formNavigation to StateNotifier and watch it in this widget
+      //     final formData = formDataNotifier.data;
+      //     onNavigationPressed(formDataNotifier, context, ref, formImagesNotifier, formNavigation,
+      //         targetTransactionData: formData);
+      //   },
+      //   icon: const PrintIconB(),
+      // ),
     ];
   }
 
