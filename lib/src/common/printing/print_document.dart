@@ -169,7 +169,7 @@ pw.Widget arabicText(
     padding: const pw.EdgeInsets.symmetric(horizontal: 3, vertical: 0),
     child: pw.Text(
       text,
-      maxLines: 1, // Or another number that makes sense for your layout
+      maxLines: 2, // Or another number that makes sense for your layout
       overflow: pw.TextOverflow.clip, // Adds '...' to truncated text
       textAlign: pw.TextAlign.center,
       textDirection: pw.TextDirection.rtl,
