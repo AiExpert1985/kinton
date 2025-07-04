@@ -27,7 +27,10 @@ import 'package:tablets/src/features/customers/controllers/customer_report_contr
 import 'package:tablets/src/features/customers/controllers/customer_screen_controller.dart';
 import 'package:tablets/src/features/customers/model/customer.dart';
 import 'package:tablets/src/features/customers/repository/customer_db_cache_provider.dart';
+import 'package:tablets/src/features/products/controllers/product_report_controller.dart';
+import 'package:tablets/src/features/products/controllers/product_screen_controller.dart';
 import 'package:tablets/src/features/products/repository/product_db_cache_provider.dart';
+import 'package:tablets/src/features/products/view/product_screen.dart';
 import 'package:tablets/src/features/salesmen/controllers/salesman_report_controller.dart';
 import 'package:tablets/src/features/salesmen/controllers/salesman_screen_controller.dart';
 import 'package:tablets/src/features/salesmen/repository/salesman_db_cache_provider.dart';
@@ -326,6 +329,8 @@ class FastReports extends ConsumerWidget {
                     VerticalGap.xl,
                     buildSalesmanTasksButton(context, ref),
                     VerticalGap.xl,
+                    buildInventoryButton(context, ref),
+                    VerticalGap.xl,
                     const RistrictedAccessWidget(
                       allowedPrivilages: [],
                       child: HideProductCheckBox(),
@@ -474,6 +479,36 @@ Widget buildAllDebtButton(BuildContext context, WidgetRef ref) {
       await initializeAppData(context, ref);
       if (context.mounted) {
         customerReportController.showAllCustomersDebt(context, ref);
+      }
+    },
+  );
+}
+
+// Path: lib/src/features/home/view/home_screen.dart
+
+Widget buildInventoryButton(BuildContext context, WidgetRef ref) {
+  final productReportController = ref.read(productReportControllerProvider);
+  final productScreenController = ref.read(productScreenControllerProvider);
+
+  return FastAccessReportsButton(
+    backgroundColor: Colors.orange[100],
+    'الجرد المخزني',
+    () async {
+      await initializeAppData(context, ref);
+      if (context.mounted) {
+        productScreenController.setFeatureScreenData(context);
+
+        // --- FIX IS HERE ---
+        // Filter the products to exclude any that are marked as hidden in special reports.
+        final inventoryMap = getFilterProductInventory(ref, true);
+        final List<List<dynamic>> inventoryList = inventoryMap.map((product) {
+          return [
+            product['productName'],
+            product['productQuantity'],
+          ];
+        }).toList();
+
+        productReportController.showInvontoryReport(context, inventoryList, 'الجرد المخزني');
       }
     },
   );
