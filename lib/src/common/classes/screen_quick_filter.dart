@@ -68,9 +68,20 @@ class ScreenDataQuickFilters extends StateNotifier<List<QuickFilter>> {
       if (value == null || value.toString().trim().isEmpty) {
         continue;
       } else if (type == QuickFilterType.contains) {
-        listValue = listValue.where((item) => (item[property] ?? '').contains(value)).toList();
+        listValue = listValue.where((item) {
+          final itemValue = (item[property] ?? '').toString().trim();
+          final searchValue = value.toString().trim();
+          return itemValue.contains(searchValue);
+        }).toList();
       } else if (type == QuickFilterType.equals) {
-        listValue = listValue.where((item) => item[property] == value).toList();
+        listValue = listValue.where((item) {
+          final itemValue = item[property];
+          // Trim string values to handle extra spaces
+          if (itemValue is String && value is String) {
+            return itemValue.trim() == value.trim();
+          }
+          return itemValue == value;
+        }).toList();
       } else if (type == QuickFilterType.lessThanOrEqual) {
         listValue = listValue.where((item) => item[property] <= value).toList();
       } else if (type == QuickFilterType.lessThan) {
