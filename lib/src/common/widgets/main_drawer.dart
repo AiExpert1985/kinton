@@ -56,6 +56,8 @@ class MainDrawer extends ConsumerWidget {
                   VerticalGap.m,
                   TasksButton(),
                   VerticalGap.m,
+                  WarehouseButton(),
+                  VerticalGap.m,
                   SettingsButton(),
                   Spacer(),
                   PendingsButton(),
@@ -75,8 +77,8 @@ void processAndMoveToTargetPage(BuildContext context, WidgetRef ref,
   // update user info, so if the user is blocked by admin, while he uses the app he will be blocked
   ref.read(userInfoProvider.notifier).loadUserInfo(ref);
   final userInfo = ref.read(userInfoProvider);
-  if (userInfo == null || !userInfo.hasAccess || userInfo.privilage != UserPrivilage.admin.name) {
-    // only admin (who has access) can make backup
+  if (userInfo == null || !userInfo.hasAccess) {
+    // user must have access
     return;
   }
   final pageLoadingNotifier = ref.read(pageIsLoadingNotifier.notifier);
@@ -92,7 +94,10 @@ void processAndMoveToTargetPage(BuildContext context, WidgetRef ref,
     return;
   }
   final pageTitleNotifier = ref.read(pageTitleProvider.notifier);
-  await autoDatabaseBackup(context, ref);
+  // Only admin users can trigger database backup
+  if (userInfo.privilage == UserPrivilage.admin.name) {
+    await autoDatabaseBackup(context, ref);
+  }
   pageLoadingNotifier.state = true;
   // note that dbCaches are only used for mirroring the database, all the data used in the
   // app in the screenData, which is a processed version of dbCache
@@ -212,6 +217,13 @@ class SettingsButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final userInfo = ref.watch(userInfoProvider);
+    final isAccountant = userInfo?.privilage == UserPrivilage.accountant.name;
+
+    if (isAccountant) {
+      return const SizedBox.shrink();
+    }
+
     return MainDrawerButton(
       'settings',
       S.of(context).settings,
@@ -243,6 +255,13 @@ class SalesmenButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final userInfo = ref.watch(userInfoProvider);
+    final isAccountant = userInfo?.privilage == UserPrivilage.accountant.name;
+
+    if (isAccountant) {
+      return const SizedBox.shrink();
+    }
+
     final salesmanScreenController = ref.read(salesmanScreenControllerProvider);
     final route = AppRoute.salesman.name;
     final pageTitle = S.of(context).salesmen;
@@ -311,10 +330,7 @@ class TasksButton extends ConsumerWidget {
       // update user info, so if the user is blocked by admin, while he uses the app he will be blocked
       ref.read(userInfoProvider.notifier).loadUserInfo(ref);
       final userInfo = ref.read(userInfoProvider);
-      if (userInfo == null ||
-          !userInfo.hasAccess ||
-          userInfo.privilage != UserPrivilage.admin.name) {
-        // only admin (who has access) can make backup
+      if (userInfo == null || !userInfo.hasAccess) {
         return;
       }
       final pageLoadingNotifier = ref.read(pageIsLoadingNotifier.notifier);
@@ -330,7 +346,10 @@ class TasksButton extends ConsumerWidget {
         return;
       }
       final pageTitleNotifier = ref.read(pageTitleProvider.notifier);
-      await autoDatabaseBackup(context, ref);
+      // Only admin users can trigger database backup
+      if (userInfo.privilage == UserPrivilage.admin.name) {
+        await autoDatabaseBackup(context, ref);
+      }
       pageLoadingNotifier.state = true;
       // note that dbCaches are only used for mirroring the database, all the data used in the
       // app in the screenData, which is a processed version of dbCache
@@ -353,6 +372,39 @@ class TasksButton extends ConsumerWidget {
       }
       // make datePicker equals today
       ref.read(selectedDateProvider.notifier).setDate(DateTime.now());
+    });
+  }
+}
+
+class WarehouseButton extends ConsumerWidget {
+  const WarehouseButton({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userInfo = ref.watch(userInfoProvider);
+
+    if (userInfo == null || userInfo.privilage != UserPrivilage.warehouse.name) {
+      return const SizedBox.shrink();
+    }
+
+    return MainDrawerButton('warehouse', 'طباعة المجهز', () async {
+      final pageLoadingNotifier = ref.read(pageIsLoadingNotifier.notifier);
+      final pageTitleNotifier = ref.read(pageTitleProvider.notifier);
+
+      if (pageLoadingNotifier.state) {
+        failureUserMessage(context, "يرجى الانتظار حتى اكتمال تحميل بيانات البرنامج");
+        return;
+      }
+
+      pageLoadingNotifier.state = true;
+      pageTitleNotifier.state = 'طباعة المجهز';
+
+      if (context.mounted) {
+        Navigator.of(context).pop();
+        context.goNamed(AppRoute.warehouse.name);
+      }
+
+      pageLoadingNotifier.state = false;
     });
   }
 }

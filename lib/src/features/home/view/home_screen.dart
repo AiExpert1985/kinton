@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +18,7 @@ import 'package:tablets/src/common/providers/user_info_provider.dart';
 import 'package:tablets/src/common/values/constants.dart';
 import 'package:tablets/src/common/values/gaps.dart';
 import 'package:tablets/src/common/widgets/custom_icons.dart';
+import 'package:tablets/src/common/widgets/dialog_delete_confirmation.dart';
 import 'package:tablets/src/common/widgets/home_greetings.dart';
 import 'package:tablets/src/common/widgets/main_frame.dart';
 import 'package:tablets/src/common/widgets/page_loading.dart';
@@ -41,6 +43,7 @@ import 'package:tablets/src/features/transactions/controllers/transaction_form_d
 import 'package:tablets/src/features/transactions/model/transaction.dart';
 import 'package:tablets/src/features/transactions/repository/transaction_db_cache_provider.dart';
 import 'package:tablets/src/features/transactions/view/transaction_show_form.dart';
+import 'package:tablets/src/routers/go_router_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -70,8 +73,18 @@ class _HomeScreenGreetingState extends ConsumerState<HomeScreenGreeting> {
   Widget build(BuildContext context) {
     ref.watch(settingsDbCacheProvider);
     ref.watch(settingsFormDataProvider);
-    ref.watch(userInfoProvider); // to update UI when user info finally loaded
+    final userInfo = ref.watch(userInfoProvider); // Watch for changes
     final settingsDbCache = ref.read(settingsDbCacheProvider.notifier);
+
+    // Warehouse users get a dedicated simple view (show immediately without waiting for settings)
+    if (userInfo != null &&
+        userInfo.privilage == UserPrivilage.warehouse.name) {
+      return Container(
+        padding: const EdgeInsets.all(15),
+        child: const WarehouseHomeView(),
+      );
+    }
+
     // since settings is the last doecument loaded from db, if it is being not empty means it finish loading
     Widget screenWidget = (settingsDbCache.data.isEmpty)
         ? const PageLoading()
@@ -79,7 +92,9 @@ class _HomeScreenGreetingState extends ConsumerState<HomeScreenGreeting> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               RistrictedAccessWidget(
-                allowedPrivilages: const [],
+                allowedPrivilages: [
+                  UserPrivilage.accountant.name,
+                ],
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   width: 200,
@@ -89,6 +104,7 @@ class _HomeScreenGreetingState extends ConsumerState<HomeScreenGreeting> {
                       CustomerFastAccessButtons(),
                       VendorFastAccessButtons(),
                       InternalFastAccessButtons(),
+                      WarehouseFastAccessButtons(),
                     ],
                   ),
                 ),
@@ -106,6 +122,9 @@ class CustomerFastAccessButtons extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final userInfo = ref.watch(userInfoProvider);
+    final isAccountant = userInfo?.privilage == UserPrivilage.accountant.name;
+
     return FastAccessButtonsContainer(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -114,11 +133,13 @@ class CustomerFastAccessButtons extends ConsumerWidget {
             TransactionType.customerInvoice.name,
             textColor: Colors.green[100],
           ),
-          VerticalGap.l,
-          FastAccessFormButton(
-            TransactionType.customerReceipt.name,
-            textColor: Colors.red[100],
-          ),
+          if (!isAccountant) ...[
+            VerticalGap.l,
+            FastAccessFormButton(
+              TransactionType.customerReceipt.name,
+              textColor: Colors.red[100],
+            ),
+          ],
           VerticalGap.l,
           FastAccessFormButton(
             TransactionType.customerReturn.name,
@@ -237,7 +258,8 @@ class FastAccessFormButton extends ConsumerWidget {
           // so, we return and not proceed
           // this is done to fix the bug of pressing buttons multiple times at the very start of the app
           // when the app is loading databases into dBCaches
-          failureUserMessage(context, "يرجى الانتظار حتى اكتمال تحميل بيانات البرنامج");
+          failureUserMessage(
+              context, "يرجى الانتظار حتى اكتمال تحميل بيانات البرنامج");
           return;
         }
         pageLoadingNotifier.state = true;
@@ -262,7 +284,9 @@ class FastAccessFormButton extends ConsumerWidget {
         width: 70,
         padding: const EdgeInsets.all(0),
         child: Center(
-            child: Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 15))),
+            child: Text(label,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 15))),
       ),
     );
   }
@@ -286,9 +310,14 @@ class FastReports extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.watch(userInfoProvider);
+    final userInfo = ref.watch(userInfoProvider);
+    final isAccountant = userInfo?.privilage == UserPrivilage.accountant.name;
+
     return RistrictedAccessWidget(
-      allowedPrivilages: [UserPrivilage.guest.name],
+      allowedPrivilages: [
+        UserPrivilage.guest.name,
+        UserPrivilage.accountant.name,
+      ],
       child: Container(
           padding: const EdgeInsets.all(20),
           width: 200,
@@ -305,8 +334,10 @@ class FastReports extends ConsumerWidget {
                   ),
                   child: Column(
                     children: [
-                      buildAllDebtButton(context, ref),
-                      VerticalGap.xl,
+                      if (!isAccountant) ...[
+                        buildAllDebtButton(context, ref),
+                        VerticalGap.xl,
+                      ],
                       buildSoldItemsButton(context, ref),
                       VerticalGap.xl,
                       buildCustomerMatchingButton(context, ref),
@@ -324,10 +355,12 @@ class FastReports extends ConsumerWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     buildSoldItemsButton(context, ref, isSupervisor: true),
-                    VerticalGap.xl,
-                    buildSalesmanCustomersButton(context, ref),
-                    VerticalGap.xl,
-                    buildSalesmanTasksButton(context, ref),
+                    if (!isAccountant) ...[
+                      VerticalGap.xl,
+                      buildSalesmanCustomersButton(context, ref),
+                      VerticalGap.xl,
+                      buildSalesmanTasksButton(context, ref),
+                    ],
                     VerticalGap.xl,
                     buildInventoryButton(context, ref),
                     VerticalGap.xl,
@@ -364,16 +397,16 @@ Widget buildCustomerMatchingButton(BuildContext context, WidgetRef ref,
         if (customerData == null) {
           return;
         }
-        final customerTransactions =
-            customerScreenController.getCustomerTransactions(customerData['dbRef']);
+        final customerTransactions = customerScreenController
+            .getCustomerTransactions(customerData['dbRef']);
         final customer = Customer.fromMap(customerData);
         if (customer.initialCredit > 0) {
           final intialDebtTransaction = _createInitialDebtTransaction(customer);
           customerTransactions.add(intialDebtTransaction);
         }
         if (context.mounted) {
-          final customerMatchingData =
-              customerScreenController.customerMatching(context, customerTransactions);
+          final customerMatchingData = customerScreenController
+              .customerMatching(context, customerTransactions);
           customerReportController.showCustomerMatchingReport(
               context, customerMatchingData, customerData['name']);
         }
@@ -425,16 +458,20 @@ Widget buildSalesmanCustomersButton(BuildContext context, WidgetRef ref) {
         final salesmanCustomerMaps = customersDbCache.data.where((customer) {
           return customer['salesmanDbRef'] == salesmanData['dbRef'];
         }).toList();
-        final salesmanCustomers =
-            salesmanCustomerMaps.map((customerMap) => Customer.fromMap(customerMap)).toList();
-        final salesmanTransactionMaps = transactionsDbCache.data.where((transaction) {
-          DateTime transactionDate =
-              transaction['date'] is DateTime ? transaction['date'] : transaction['date'].toDate();
+        final salesmanCustomers = salesmanCustomerMaps
+            .map((customerMap) => Customer.fromMap(customerMap))
+            .toList();
+        final salesmanTransactionMaps =
+            transactionsDbCache.data.where((transaction) {
+          DateTime transactionDate = transaction['date'] is DateTime
+              ? transaction['date']
+              : transaction['date'].toDate();
           // I need to subtract one day for start date to make the searched date included
-          bool isAfterStartDate = startDate == null || !transactionDate.isBefore(startDate);
+          bool isAfterStartDate =
+              startDate == null || !transactionDate.isBefore(startDate);
           // I need to add one day to the end date to make the searched date included
-          bool isBeforeEndDate =
-              endDate == null || !transactionDate.isAfter(endDate.add(const Duration(days: 1)));
+          bool isBeforeEndDate = endDate == null ||
+              !transactionDate.isAfter(endDate.add(const Duration(days: 1)));
           return transaction['salesmanDbRef'] == salesmanData['dbRef'] &&
               isAfterStartDate &&
               isBeforeEndDate;
@@ -445,12 +482,17 @@ Widget buildSalesmanCustomersButton(BuildContext context, WidgetRef ref) {
         final customersInfo = salesmanScreenController.getCustomersInfo(
             salesmanCustomers, salesmanTransactions,
             isSuperVisor: true, ref: ref);
-        final customersBasicData = customersInfo['customersData'] as List<List<dynamic>>;
-        final startDateAsString = startDate == null ? '' : 'من ${formatDate(startDate)}';
-        final endDataeAsString = endDate == null ? '' : 'الى ${formatDate(endDate)}';
-        final reportTitle = '${salesmanData['name']} \n $startDateAsString $endDataeAsString';
+        final customersBasicData =
+            customersInfo['customersData'] as List<List<dynamic>>;
+        final startDateAsString =
+            startDate == null ? '' : 'من ${formatDate(startDate)}';
+        final endDataeAsString =
+            endDate == null ? '' : 'الى ${formatDate(endDate)}';
+        final reportTitle =
+            '${salesmanData['name']} \n $startDateAsString $endDataeAsString';
         if (context.mounted) {
-          salesmanReportController.showCustomers(context, customersBasicData, reportTitle);
+          salesmanReportController.showCustomers(
+              context, customersBasicData, reportTitle);
         }
       }
     },
@@ -508,14 +550,16 @@ Widget buildInventoryButton(BuildContext context, WidgetRef ref) {
           ];
         }).toList();
 
-        productReportController.showInvontoryReport(context, inventoryList, 'الجرد المخزني');
+        productReportController.showInvontoryReport(
+            context, inventoryList, 'الجرد المخزني');
       }
     },
   );
 }
 
 /// supervisor report differs in two things, (1) button name, (2) last two columns are empty in supervisor report
-Widget buildSoldItemsButton(BuildContext context, WidgetRef ref, {bool isSupervisor = false}) {
+Widget buildSoldItemsButton(BuildContext context, WidgetRef ref,
+    {bool isSupervisor = false}) {
   final salesmanReportController = ref.read(salesmanReportControllerProvider);
   final salesmanScreenController = ref.read(salesmanScreenControllerProvider);
   final salesmanDbCache = ref.read(salesmanDbCacheProvider.notifier);
@@ -528,8 +572,8 @@ Widget buildSoldItemsButton(BuildContext context, WidgetRef ref, {bool isSupervi
     () async {
       await initializeAppData(context, ref);
       if (context.mounted) {
-        final nameAndDates = await selectionDialog(
-            context, ref, salesmanDbCache.data, S.of(context).salesman_selection);
+        final nameAndDates = await selectionDialog(context, ref,
+            salesmanDbCache.data, S.of(context).salesman_selection);
         final salesmanData = nameAndDates[0];
         // salesman must be selected, otherwise we can't create report
         if (salesmanData == null) {
@@ -543,8 +587,8 @@ Widget buildSoldItemsButton(BuildContext context, WidgetRef ref, {bool isSupervi
           reportTitle =
               '${S.of(context).salesman_selling_report} \n ${salesmanData['name']} \n ${S.of(context).for_the_duration} ${formatDate(startDate ?? DateTime.parse("2024-12-01T14:30:00"))} - ${formatDate(endDate ?? DateTime.now())}';
         }
-        List<List<dynamic>> soldItemsList = salesmanScreenController.salesmanItemsSold(
-            salesmanData['dbRef'], startDate, endDate, ref);
+        List<List<dynamic>> soldItemsList = salesmanScreenController
+            .salesmanItemsSold(salesmanData['dbRef'], startDate, endDate, ref);
         if (isSupervisor) {
           // filter items not to show for the supervisor
           soldItemsList = soldItemsList.where((item) {
@@ -669,7 +713,8 @@ Future<List<dynamic>> selectionDialog(BuildContext context, WidgetRef ref,
                           textAlign: TextAlign.center,
                           name: 'startDate',
                           decoration: InputDecoration(
-                            labelStyle: const TextStyle(color: Colors.red, fontSize: 17),
+                            labelStyle: const TextStyle(
+                                color: Colors.red, fontSize: 17),
                             labelText: S.of(context).from_date,
                             border: const OutlineInputBorder(),
                           ),
@@ -678,7 +723,8 @@ Future<List<dynamic>> selectionDialog(BuildContext context, WidgetRef ref,
                           onChanged: (picked) {
                             if (picked != null) {
                               // Set time to the beginning of the day
-                              startDate = DateTime(picked.year, picked.month, picked.day);
+                              startDate = DateTime(
+                                  picked.year, picked.month, picked.day);
                             } else {
                               startDate = null;
                             }
@@ -691,7 +737,8 @@ Future<List<dynamic>> selectionDialog(BuildContext context, WidgetRef ref,
                           textAlign: TextAlign.center,
                           name: 'endDate',
                           decoration: InputDecoration(
-                            labelStyle: const TextStyle(color: Colors.red, fontSize: 17),
+                            labelStyle: const TextStyle(
+                                color: Colors.red, fontSize: 17),
                             labelText: S.of(context).to_date,
                             border: const OutlineInputBorder(),
                           ),
@@ -700,7 +747,8 @@ Future<List<dynamic>> selectionDialog(BuildContext context, WidgetRef ref,
                           onChanged: (picked) {
                             if (picked != null) {
                               // Set time to the end of the day to make the range inclusive
-                              endDate = DateTime(picked.year, picked.month, picked.day, 23, 59, 59);
+                              endDate = DateTime(picked.year, picked.month,
+                                  picked.day, 23, 59, 59);
                             } else {
                               endDate = null;
                             }
@@ -746,13 +794,15 @@ class HideProductCheckBox extends ConsumerWidget {
       child: allAccountsAsyncValue.when(
         data: (allAccounts) {
           // Find all accounts with the 'guest' privilege.
-          final guestAccounts =
-              allAccounts.where((account) => account['privilage'] == 'guest').toList();
+          final guestAccounts = allAccounts
+              .where((account) => account['privilage'] == 'guest')
+              .toList();
 
           // Determine the checkbox state from the first guest account, if any.
           // This assumes all guest accounts should have the same 'hasAccess' status.
-          final bool hasAccess =
-              guestAccounts.isNotEmpty ? guestAccounts.first['hasAccess'] ?? false : false;
+          final bool hasAccess = guestAccounts.isNotEmpty
+              ? guestAccounts.first['hasAccess'] ?? false
+              : false;
 
           return Checkbox(
             value: hasAccess,
@@ -774,7 +824,8 @@ class HideProductCheckBox extends ConsumerWidget {
             },
           );
         },
-        loading: () => const CircularProgressIndicator(), // Show loading indicator
+        loading: () =>
+            const CircularProgressIndicator(), // Show loading indicator
         error: (error, stack) => Text('Error: $error'), // Handle errors
       ),
     );
@@ -788,7 +839,8 @@ class ReloadDbCacheData extends ConsumerStatefulWidget {
 
   @override
   // ignore: library_private_types_in_public_api
-  _MyStatefulConsumerWidgetState createState() => _MyStatefulConsumerWidgetState();
+  _MyStatefulConsumerWidgetState createState() =>
+      _MyStatefulConsumerWidgetState();
 }
 
 class _MyStatefulConsumerWidgetState extends ConsumerState<ReloadDbCacheData> {
@@ -804,7 +856,8 @@ class _MyStatefulConsumerWidgetState extends ConsumerState<ReloadDbCacheData> {
   Widget build(BuildContext context) {
     return Row(children: [
       reload
-          ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator())
+          ? const SizedBox(
+              width: 18, height: 18, child: CircularProgressIndicator())
           : IconButton(
               onPressed: () async {
                 setLoadingStatus(true);
@@ -815,5 +868,348 @@ class _MyStatefulConsumerWidgetState extends ConsumerState<ReloadDbCacheData> {
             ),
       const Text(' مزامنة البيانات')
     ]);
+  }
+}
+
+class WarehouseFastAccessButtons extends ConsumerWidget {
+  const WarehouseFastAccessButtons({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userInfo = ref.watch(userInfoProvider);
+
+    if (userInfo == null ||
+        userInfo.privilage != UserPrivilage.warehouse.name) {
+      return const SizedBox.shrink();
+    }
+
+    return FastAccessButtonsContainer(
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.orange[100],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8.0),
+          ),
+        ),
+        onPressed: () {
+          context.goNamed('warehouse');
+        },
+        child: const Padding(
+          padding: EdgeInsets.all(12.0),
+          child: Text(
+            'طباعة المجهز',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class WarehouseHomeView extends ConsumerWidget {
+  const WarehouseHomeView({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userInfo = ref.watch(userInfoProvider);
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'مرحبا ${userInfo?.name ?? ""}',
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.blueGrey,
+            ),
+          ),
+          const SizedBox(height: 60),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 40),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16.0),
+              ),
+              elevation: 8,
+            ),
+            onPressed: () {
+              context.goNamed(AppRoute.warehouse.name);
+            },
+            child: const Text(
+              'طباعة القوائم',
+              style: TextStyle(
+                fontSize: 28,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 40),
+          const _WarehouseLogoutButton(),
+        ],
+      ),
+    );
+  }
+}
+
+class _WarehouseLogoutButton extends ConsumerWidget {
+  const _WarehouseLogoutButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.red[400],
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+        elevation: 4,
+      ),
+      onPressed: () async {
+        final confiramtion = await showDeleteConfirmationDialog(
+            context: context,
+            messagePart1: "",
+            messagePart2: S.of(context).alert_before_signout);
+        if (confiramtion != null) {
+          ref.read(userInfoProvider.notifier).reset();
+          FirebaseAuth.instance.signOut();
+        }
+      },
+      icon: const LocaleAwareLogoutIcon(),
+      label: Text(
+        S.of(context).logout,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+}
+
+class AccountantHomeView extends ConsumerWidget {
+  const AccountantHomeView({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userInfo = ref.watch(userInfoProvider);
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            'مرحبا ${userInfo?.name ?? ""}',
+            style: const TextStyle(
+              fontSize: 32,
+              fontWeight: FontWeight.bold,
+              color: Colors.blueGrey,
+            ),
+          ),
+          const SizedBox(height: 40),
+          Wrap(
+            spacing: 20,
+            runSpacing: 20,
+            alignment: WrapAlignment.center,
+            children: [
+              _AccountantCustomerMatchingButton(
+                label: 'كشف زبون',
+                color: Colors.red[100],
+              ),
+              _AccountantButton(
+                label: 'قائمة بيع',
+                color: Colors.green[100],
+                transactionType: TransactionType.customerInvoice.name,
+              ),
+              _AccountantButton(
+                label: 'ارجاع زبون',
+                color: Colors.grey[300],
+                transactionType: TransactionType.customerReturn.name,
+              ),
+              _AccountantButton(
+                label: 'هدية زبون',
+                color: Colors.orange[100],
+                transactionType: TransactionType.gifts.name,
+              ),
+            ],
+          ),
+          const SizedBox(height: 60),
+          const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ReloadDbCacheData(),
+            ],
+          ),
+          const SizedBox(height: 20),
+          const _AccountantLogoutButton(),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountantCustomerMatchingButton extends ConsumerWidget {
+  const _AccountantCustomerMatchingButton({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final customerDbCache = ref.read(customerDbCacheProvider.notifier);
+    final customerScreenController = ref.read(customerScreenControllerProvider);
+    final customerReportController = ref.read(customerReportControllerProvider);
+
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 50),
+        elevation: 4,
+      ),
+      onPressed: () async {
+        await initializeAppData(context, ref);
+        if (context.mounted) {
+          final nameAndDates = await selectionDialog(
+              context, ref, customerDbCache.data, S.of(context).customers,
+              includeDates: false);
+          final customerData = nameAndDates[0];
+          // customer must be selected, otherwise we can't create report
+          if (customerData == null) {
+            return;
+          }
+          final customerTransactions = customerScreenController
+              .getCustomerTransactions(customerData['dbRef']);
+          final customer = Customer.fromMap(customerData);
+          if (customer.initialCredit > 0) {
+            final intialDebtTransaction =
+                _createInitialDebtTransaction(customer);
+            customerTransactions.add(intialDebtTransaction);
+          }
+          if (context.mounted) {
+            final customerMatchingData = customerScreenController
+                .customerMatching(context, customerTransactions);
+            customerReportController.showCustomerMatchingReport(
+                context, customerMatchingData, customerData['name']);
+          }
+        }
+      },
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountantButton extends ConsumerWidget {
+  const _AccountantButton({
+    required this.label,
+    required this.color,
+    required this.transactionType,
+  });
+
+  final String label;
+  final Color? color;
+  final String transactionType;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final textEditingNotifier = ref.read(textFieldsControllerProvider.notifier);
+    final imagePickerNotifier = ref.read(imagePickerProvider.notifier);
+    final formDataNotifier = ref.read(transactionFormDataProvider.notifier);
+    final backgroundColorNofifier = ref.read(backgroundColorProvider.notifier);
+    final settingsDataNotifier = ref.read(settingsFormDataProvider.notifier);
+    final transactionDbCache = ref.read(transactionDbCacheProvider.notifier);
+    final fromNavigator = ref.read(formNavigatorProvider);
+
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 60, vertical: 50),
+        elevation: 4,
+      ),
+      onPressed: () async {
+        fromNavigator.isReadOnly = false;
+        final pageLoadingNotifier = ref.read(pageIsLoadingNotifier.notifier);
+        if (pageLoadingNotifier.state) {
+          failureUserMessage(
+              context, "يرجى الانتظار حتى اكتمال تحميل بيانات البرنامج");
+          return;
+        }
+        pageLoadingNotifier.state = true;
+        await initializeAppData(context, ref);
+        backgroundColorNofifier.state = normalColor!;
+        if (context.mounted) {
+          TransactionShowForm.showForm(
+            context,
+            ref,
+            imagePickerNotifier,
+            formDataNotifier,
+            settingsDataNotifier,
+            textEditingNotifier,
+            formType: transactionType,
+            transactionDbCache: transactionDbCache,
+          );
+          pageLoadingNotifier.state = false;
+        }
+      },
+      child: Text(
+        label,
+        textAlign: TextAlign.center,
+        style: const TextStyle(
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+class _AccountantLogoutButton extends ConsumerWidget {
+  const _AccountantLogoutButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return ElevatedButton.icon(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.red[400],
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8.0),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+        elevation: 4,
+      ),
+      onPressed: () async {
+        final confiramtion = await showDeleteConfirmationDialog(
+            context: context,
+            messagePart1: "",
+            messagePart2: S.of(context).alert_before_signout);
+        if (confiramtion != null) {
+          ref.read(userInfoProvider.notifier).reset();
+          FirebaseAuth.instance.signOut();
+        }
+      },
+      icon: const LocaleAwareLogoutIcon(),
+      label: Text(
+        S.of(context).logout,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+    );
   }
 }

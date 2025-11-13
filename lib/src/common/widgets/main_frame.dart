@@ -9,6 +9,7 @@ import 'package:tablets/src/common/widgets/custom_icons.dart';
 import 'package:tablets/src/common/widgets/dialog_delete_confirmation.dart';
 import 'package:tablets/src/common/widgets/main_drawer.dart';
 import 'package:tablets/src/common/widgets/ristricted_access_widget.dart';
+import 'package:tablets/src/features/authentication/model/user_account.dart';
 import 'package:tablets/src/features/settings/repository/settings_db_cache_provider.dart';
 
 class AppScreenFrame extends ConsumerWidget {
@@ -20,11 +21,16 @@ class AppScreenFrame extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final pageTitle = ref.watch(pageTitleProvider);
     ref.watch(settingsDbCacheProvider);
+    final userInfo = ref.watch(userInfoProvider);
     // I used settingDbCache to check if settings is loaded, as and indicator of finishing database loading
     // because it is the last document loaded from database, if loaded, then I show the side drawer button
     // I want to prevent user from taking any action untill all loading is done
     final settingsDbCache = ref.read(settingsDbCacheProvider.notifier);
     // since settings is the last doecument loaded from db, if it is being not empty means it finish loading
+
+    // Hide drawer for warehouse users only
+    final shouldShowDrawer = userInfo == null ||
+        userInfo.privilage != UserPrivilage.warehouse.name;
 
     return Scaffold(
       appBar: PreferredSize(
@@ -39,7 +45,9 @@ class AppScreenFrame extends ConsumerWidget {
                   leadingWidth: 140,
                   leading: Builder(
                     builder: (context) => RistrictedAccessWidget(
-                      allowedPrivilages: const [],
+                      allowedPrivilages: [
+                        UserPrivilage.accountant.name,
+                      ],
                       child: IconButton(
                         icon: const MainMenuIcon(),
                         onPressed: () {
@@ -75,7 +83,7 @@ class AppScreenFrame extends ConsumerWidget {
               : null,
         ),
       ),
-      drawer: const MainDrawer(),
+      drawer: shouldShowDrawer ? const MainDrawer() : null,
       body: Container(
         color: const Color.fromARGB(255, 250, 251, 252),
         padding: const EdgeInsets.all(30),
