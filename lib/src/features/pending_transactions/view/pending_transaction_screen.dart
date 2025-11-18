@@ -29,11 +29,9 @@ import 'package:tablets/src/common/functions/utils.dart';
 import 'package:tablets/src/common/values/gaps.dart';
 import 'package:tablets/src/common/widgets/form_fields/drop_down_with_search.dart';
 import 'package:tablets/src/common/widgets/form_fields/edit_box.dart';
-import 'package:tablets/src/features/customers/repository/customer_db_cache_provider.dart';
 import 'package:tablets/src/features/pending_transactions/controllers/pending_transaction_quick_filter_controller.dart';
 import 'package:tablets/src/features/products/controllers/product_screen_controller.dart';
 import 'package:tablets/src/features/products/repository/product_db_cache_provider.dart';
-import 'package:tablets/src/features/salesmen/repository/salesman_db_cache_provider.dart';
 import 'package:tablets/src/features/pending_transactions/controllers/pending_transaction_drawer_provider.dart';
 import 'package:tablets/src/features/pending_transactions/controllers/pending_transaction_form_controller.dart';
 import 'package:tablets/src/features/pending_transactions/controllers/pending_transaction_screen_controller.dart';
@@ -47,6 +45,7 @@ import 'package:tablets/src/common/widgets/main_screen_list_cells.dart';
 import 'package:tablets/src/features/transactions/model/transaction.dart';
 import 'package:tablets/src/features/transactions/repository/transaction_db_cache_provider.dart';
 import 'package:tablets/src/features/transactions/view/forms/item_list.dart';
+import 'package:tablets/src/features/counters/repository/counter_repository_provider.dart';
 
 class PendingTransactions extends ConsumerWidget {
   const PendingTransactions({super.key});
@@ -202,8 +201,9 @@ class DataRow extends ConsumerWidget {
               MainScreenTextCell(printStatus, isWarning: isWarning),
               MainScreenTextCell(transactionScreenData[transactionNotesKey], isWarning: isWarning),
               IconButton(
-                  onPressed: () {
-                    approveTransaction(context, ref, transaction);
+                  onPressed: () async {
+                    await approveTransaction(context, ref, transaction);
+                    if (!context.mounted) return;
                     ref
                         .read(pendingTransactionQuickFiltersProvider.notifier)
                         .applyListFilter(context);
@@ -325,7 +325,8 @@ void addToDeletedTransactionsDb(WidgetRef ref, Map<String, dynamic> itemData) {
   deletedTransactionsDbCache.update(deletionItemData, DbCacheOperationTypes.add);
 }
 
-void approveTransaction(BuildContext context, WidgetRef ref, Transaction transaction) {
+Future<void> approveTransaction(
+    BuildContext context, WidgetRef ref, Transaction transaction) async {
   final transactionDbCache = ref.read(transactionDbCacheProvider.notifier);
   // below check is added to prevent the bug of duplicating of pressing approve button multiple times
   if (transactionDbCache.getItemByDbRef(transaction.dbRef).isNotEmpty) {
@@ -337,9 +338,12 @@ void approveTransaction(BuildContext context, WidgetRef ref, Transaction transac
   // then we udpate the transaction number if transaction is a customer invoice
   // for receipts, the number is given by the salesman in the mobile app
   if (transaction.transactionType == TransactionType.customerInvoice.name) {
-    final invoiceNumber = getNextCustomerInvoiceNumber(context, ref);
+    final invoiceNumber = await getNextCustomerInvoiceNumber(ref);
     transaction.number = invoiceNumber;
   }
+
+  if (!context.mounted) return;
+
   // save transaction to transaction database
   saveToTransactionCollection(context, ref, transaction);
   // // finally, we open it form edit (it opens unEditable, if user want he press the edit button)
@@ -419,9 +423,16 @@ double _getItemPrice(BuildContext context, WidgetRef ref, String productDbRef) {
   return getBuyingPrice(ref, productQuantity, productData['dbRef']);
 }
 
+// Get next customer invoice number from Firestore counter
+// Uses atomic increment to prevent duplicate numbers in multi-user environment
+Future<int> getNextCustomerInvoiceNumber(WidgetRef ref) async {
+  final counterRepository = ref.read(counterRepositoryProvider);
+  return await counterRepository.getNextNumber(TransactionType.customerInvoice.name);
+}
+
 // here I am giving the next number after the maximumn number previously given in both transactions & deleted
 // transactions
-int getNextCustomerInvoiceNumber(BuildContext context, WidgetRef ref) {
+int getNextCustomerInvoiceNumberFromLocalData(BuildContext context, WidgetRef ref) {
   final transactionDbCache = ref.read(transactionDbCacheProvider.notifier);
   final transactions = transactionDbCache.data;
   int maxDeletedNumber = getHighestDeletedCustomerInvoiceNumber(ref) ?? 0;
@@ -547,35 +558,57 @@ class _TransactionsFiltersState extends ConsumerState<TransactionsFilters> {
   }
 
   Widget _buildCustomerQuickFilter(BuildContext context, WidgetRef ref) {
-    final dbCache = ref.read(customerDbCacheProvider.notifier);
+    final pendingTransactionsDbCache = ref.read(pendingTransactionDbCacheProvider.notifier);
     const propertyName = 'name';
+
+    // Extract unique customer names from pending transactions to ensure exact match
+    // This prevents mismatch due to whitespace or data inconsistencies
+    final customersInTransactions = <String, Map<String, dynamic>>{};
+    for (var transaction in pendingTransactionsDbCache.data) {
+      final customerName = transaction['name'];
+      if (customerName != null && customerName.toString().isNotEmpty) {
+        customersInTransactions[customerName] = {'name': customerName};
+      }
+    }
+    final customerList = customersInTransactions.values.toList();
+
     return DropDownWithSearchFormField(
         initialValue:
             ref.read(pendingTransactionQuickFiltersProvider.notifier).getFilterValue(propertyName),
         onChangedFn: (customer) {
-          final customerName = customer['name']?.toString().trim() ?? '';
+          final customerName = customer['name'];
           QuickFilter filter = QuickFilter(propertyName, QuickFilterType.equals, customerName);
           ref.read(pendingTransactionQuickFiltersProvider.notifier).updateFilters(filter);
           ref.read(pendingTransactionQuickFiltersProvider.notifier).applyListFilter(context);
         },
-        itemsList: dbCache.data);
+        itemsList: customerList);
   }
 
   Widget _buildSalesmanQuickFilter(BuildContext context, WidgetRef ref) {
-    final dbCache = ref.read(salesmanDbCacheProvider.notifier);
+    final pendingTransactionsDbCache = ref.read(pendingTransactionDbCacheProvider.notifier);
     const propertyName = 'salesman';
+
+    // Extract unique salesman names from pending transactions to ensure exact match
+    // This prevents mismatch due to whitespace or data inconsistencies
+    final salesmenInTransactions = <String, Map<String, dynamic>>{};
+    for (var transaction in pendingTransactionsDbCache.data) {
+      final salesmanName = transaction['salesman'];
+      if (salesmanName != null && salesmanName.toString().isNotEmpty) {
+        salesmenInTransactions[salesmanName] = {'name': salesmanName};
+      }
+    }
+    final salesmanList = salesmenInTransactions.values.toList();
+
     return DropDownWithSearchFormField(
         initialValue:
             ref.read(pendingTransactionQuickFiltersProvider.notifier).getFilterValue(propertyName),
         onChangedFn: (salesman) {
-          // it is important to trim, because I faced issue with "مضر هذال" filter, i think
-          // it is good practice to trim when searching for certain text value
-          final salesmanName = salesman['name']?.toString().trim() ?? '';
+          final salesmanName = salesman['name'];
           QuickFilter filter = QuickFilter(propertyName, QuickFilterType.equals, salesmanName);
           ref.read(pendingTransactionQuickFiltersProvider.notifier).updateFilters(filter);
           ref.read(pendingTransactionQuickFiltersProvider.notifier).applyListFilter(context);
         },
-        itemsList: dbCache.data);
+        itemsList: salesmanList);
   }
 
   Widget _buildTypeQuickFilter(BuildContext context, WidgetRef ref) {
