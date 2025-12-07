@@ -42,6 +42,8 @@ import 'package:tablets/src/features/transactions/view/transaction_show_form.dar
 import 'package:tablets/src/routers/go_router_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' as firebase;
 import 'package:tablets/src/features/warehouse/services/warehouse_service.dart';
+import 'package:tablets/src/features/counters/repository/counter_repository_provider.dart';
+import 'package:tablets/src/common/providers/screen_cache_update_service.dart';
 
 final Map<String, dynamic> transactionFormDimenssions = {
   TransactionType.customerInvoice.name: {'height': 1100, 'width': 900},
@@ -160,12 +162,14 @@ class TransactionForm extends ConsumerWidget {
     return Scaffold(
       appBar: buildArabicAppBar(context, () async {
         // back to transactions screen
-        onLeavingTransaction(context, ref, formImagesNotifier);
+        await onLeavingTransaction(context, ref, formImagesNotifier);
+        if (!context.mounted) return;
         Navigator.pop(context);
         // context.goNamed(AppRoute.transactions.name);
       }, () async {
         // back to home screen
-        onLeavingTransaction(context, ref, formImagesNotifier);
+        await onLeavingTransaction(context, ref, formImagesNotifier);
+        if (!context.mounted) return;
         Navigator.pop(context);
         context.goNamed(AppRoute.home.name);
       }),
@@ -283,7 +287,8 @@ class TransactionForm extends ConsumerWidget {
       if (transactionType == TransactionType.customerInvoice.name)
         IconButton(
             onPressed: () {
-              _onSendToWarehousePressed(context, ref, formDataNotifier);
+              _onSendToWarehousePressed(
+                  context, ref, formDataNotifier, formImagesNotifier);
             },
             icon: const SendIcon()),
     ];
@@ -306,14 +311,19 @@ class TransactionForm extends ConsumerWidget {
     formDataNotifier.updateProperties({isPrintedKey: true});
   }
 
-  void _onSendToWarehousePressed(BuildContext context, WidgetRef ref,
-      ItemFormData formDataNotifier) async {
-    if (formDataNotifier.data[nameKey] == '') {
+  void _onSendToWarehousePressed(
+      BuildContext context,
+      WidgetRef ref,
+      ItemFormData formDataNotifier,
+      ImageSliderNotifier formImagesNotifier) async {
+    // Save/delete current transaction before warehouse operation (similar to navigation)
+    await onLeavingTransaction(context, ref, formImagesNotifier);
+
+    // Check if transaction still has name after cleanup
+    if (formDataNotifier.data[nameKey] == '' && context.mounted) {
       failureUserMessage(context, S.of(context).no_name_print_error);
       return;
     }
-
-    saveTransaction(context, ref, formDataNotifier.data, true);
 
     const imagePath = 'assets/images/invoice_logo.PNG';
     final image = await loadImage(imagePath);
@@ -328,7 +338,7 @@ class TransactionForm extends ConsumerWidget {
     }
   }
 
-  static void onNavigationPressed(
+  static Future<void> onNavigationPressed(
       ItemFormData formDataNotifier,
       BuildContext context,
       WidgetRef ref,
@@ -336,7 +346,7 @@ class TransactionForm extends ConsumerWidget {
       FromNavigator formNavigation,
       {Map<String, dynamic>? targetTransactionData,
       bool isNewTransaction = false,
-      bool isDeleting = false}) {
+      bool isDeleting = false}) async {
     final settingsDataNotifier = ref.read(settingsFormDataProvider.notifier);
     final textEditingNotifier = ref.read(textFieldsControllerProvider.notifier);
     final imagePickerNotifier = ref.read(imagePickerProvider.notifier);
@@ -349,11 +359,14 @@ class TransactionForm extends ConsumerWidget {
     if (!isDeleting) {
       // as we are leaving the current transaction, we should make sure to delete the transaction if it has no name
       // or to save (update) it if it does have name.
-      onLeavingTransaction(context, ref, formImagesNotifier);
+      await onLeavingTransaction(context, ref, formImagesNotifier);
     }
-    Navigator.of(context).pop();
+    // Don't pop here - let showForm handle navigation using pushReplacement
+    // Navigator.of(context).pop();
     // now load the target transaction into the form, whether it is navigated or new transaction
     // note that navigatorFormData shouldn't be null if isNewTransaction is false
+    if (!context.mounted) return;
+
     if (isNewTransaction) {
       TransactionShowForm.showForm(
         context,
@@ -364,6 +377,7 @@ class TransactionForm extends ConsumerWidget {
         textEditingNotifier,
         formType: formType,
         transactionDbCache: transactionDbCache,
+        useReplacement: true,
       );
     } else {
       if (targetTransactionData == null) {
@@ -382,6 +396,7 @@ class TransactionForm extends ConsumerWidget {
         textEditingNotifier,
         transaction: transaction,
         formType: formType,
+        useReplacement: true,
       );
     }
     final backgroundColorNofifier = ref.read(backgroundColorProvider.notifier);
@@ -402,8 +417,19 @@ class TransactionForm extends ConsumerWidget {
       final formController = ref.read(transactionFormControllerProvider);
       final transactionDbCache = ref.read(transactionDbCacheProvider.notifier);
       final screenController = ref.read(transactionScreenControllerProvider);
-      deleteTransaction(context, ref, formDataNotifier, formImagesNotifier,
-          formController, transactionDbCache, screenController,
+
+      // Check if this is the last transaction and decrement counter
+      await _decrementCounterIfLastTransaction(ref, formData);
+
+      if (!context.mounted) return;
+      await deleteTransaction(
+          context,
+          ref,
+          formDataNotifier,
+          formImagesNotifier,
+          formController,
+          transactionDbCache,
+          screenController,
           dialogOn: false);
       return;
     }
@@ -469,10 +495,29 @@ class TransactionForm extends ConsumerWidget {
     // update the bdCache (database mirror) so that we don't need to fetch data from db
     const operationType = DbCacheOperationTypes.delete;
     transactionDbCache.update(itemData, operationType);
-    // redo screenData calculations
+    // redo screenData calculations for transaction screen
     if (context.mounted) {
       screenController.setFeatureScreenData(context);
     }
+
+    // PRE-CALCULATE affected entities synchronously while context is still valid
+    // This must happen BEFORE navigation which will invalidate context
+    final cacheUpdateService = ref.read(screenCacheUpdateServiceProvider);
+    PreCalculatedCacheData? preCalculatedData;
+    if (context.mounted) {
+      preCalculatedData = cacheUpdateService.calculateAffectedEntities(
+        context,
+        itemData, // deleted transaction as old
+        null, // no new transaction
+        TransactionOperation.delete,
+      );
+    }
+
+    // Save pre-calculated data to Firebase asynchronously (no context needed)
+    if (preCalculatedData != null) {
+      _savePreCalculatedDataAsync(cacheUpdateService, preCalculatedData);
+    }
+
     // move point to previous transaction
     if (formNavigation != null && context.mounted) {
       final targetTransactionData = formNavigation.previous();
@@ -528,17 +573,20 @@ class TransactionForm extends ConsumerWidget {
     final formImagesNotifier = ref.read(imagePickerProvider.notifier);
     final screenController = ref.read(transactionScreenControllerProvider);
     final dbCache = ref.read(transactionDbCacheProvider.notifier);
-    // if (isEditing) {
-    //   if (!formController.validateData()) return;
-    //   formController.submitData();
-    // }
-    Map<String, dynamic> formData = {...formDataNotifier.data};
+
+    // Capture old transaction before editing (for cache update)
+    Map<String, dynamic>? oldTransaction;
+    Map<String, dynamic> formDataCopy = {...formDataNotifier.data};
+    if (isEditing) {
+      oldTransaction = dbCache.getItemByDbRef(formDataCopy[dbRefKey]);
+    }
+
     // we need to remove empty rows (rows without item name, which is usally last one)
-    formData = removeEmptyRows(formData);
+    formDataCopy = removeEmptyRows(formDataCopy);
     final imageUrls = formImagesNotifier.saveChanges();
-    final itemData = {...formData, 'imageUrls': imageUrls};
+    final itemData = {...formDataCopy, 'imageUrls': imageUrls};
     final transaction =
-        Transaction.fromMap({...formData, 'imageUrls': imageUrls});
+        Transaction.fromMap({...formDataCopy, 'imageUrls': imageUrls});
     formController.saveItemToDb(context, transaction, isEditing,
         keepDialogOpen: true);
     // update the bdCache (database mirror) so that we don't need to fetch data from db
@@ -546,14 +594,74 @@ class TransactionForm extends ConsumerWidget {
       // in our form the data type usually is DateTime, but the date type in dbCache should be
       // Timestamp, as to mirror the datatype of firebase
       itemData[transactionDateKey] =
-          firebase.Timestamp.fromDate(formData[transactionDateKey]);
+          firebase.Timestamp.fromDate(formDataCopy[transactionDateKey]);
     }
     final operationType =
         isEditing ? DbCacheOperationTypes.edit : DbCacheOperationTypes.add;
     dbCache.update(itemData, operationType);
-    // redo screenData calculations
+    // redo screenData calculations for transaction screen
     if (context.mounted) {
       screenController.setFeatureScreenData(context);
+    }
+
+    // Update counter if transaction number is >= current counter
+    _updateCounterIfNeeded(ref, formDataCopy);
+
+    // PRE-CALCULATE affected entities synchronously while context is still valid
+    final cacheUpdateService = ref.read(screenCacheUpdateServiceProvider);
+    if (context.mounted) {
+      final preCalculatedData = cacheUpdateService.calculateAffectedEntities(
+        context,
+        oldTransaction,
+        itemData,
+        isEditing ? TransactionOperation.edit : TransactionOperation.add,
+      );
+      // Save pre-calculated data to Firebase asynchronously (no context needed)
+      _savePreCalculatedDataAsync(cacheUpdateService, preCalculatedData);
+    }
+  }
+
+  /// Save pre-calculated data to Firebase asynchronously (no context needed)
+  static void _savePreCalculatedDataAsync(
+    ScreenCacheUpdateService cacheUpdateService,
+    PreCalculatedCacheData preCalculatedData,
+  ) {
+    // Run asynchronously without blocking the UI
+    Future.delayed(Duration.zero, () async {
+      try {
+        await cacheUpdateService.savePreCalculatedData(preCalculatedData);
+      } catch (e) {
+        errorPrint('Error saving pre-calculated cache data: $e');
+      }
+    });
+  }
+
+  static void _updateCounterIfNeeded(
+      WidgetRef ref, Map<String, dynamic> formData) {
+    final transactionType = formData[transactionTypeKey];
+    final transactionNumber = formData[numberKey];
+
+    if (transactionType != null && transactionNumber != null) {
+      final counterRepository = ref.read(counterRepositoryProvider);
+      counterRepository.ensureCounterAtLeast(
+          transactionType, transactionNumber);
+    }
+  }
+
+  static Future<void> _decrementCounterIfLastTransaction(
+      WidgetRef ref, Map<String, dynamic> formData) async {
+    final transactionType = formData[transactionTypeKey];
+    final transactionNumber = formData[numberKey];
+
+    if (transactionType != null && transactionNumber != null) {
+      final counterRepository = ref.read(counterRepositoryProvider);
+      final currentCounter =
+          await counterRepository.getCurrentNumber(transactionType);
+
+      // If this transaction number is the last one (currentCounter - 1), decrement
+      if (transactionNumber == currentCounter - 1) {
+        await counterRepository.decrementCounter(transactionType);
+      }
     }
   }
 
