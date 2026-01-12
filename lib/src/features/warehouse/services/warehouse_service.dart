@@ -101,6 +101,9 @@ class WarehouseService {
         'printedAt': Timestamp.fromDate(DateTime.now()),
       });
 
+      // Update original transaction status
+      await _updateTransactionPrintStatus(invoiceId);
+
       final docSnapshot = await docRef.get();
       final pdfPath = docSnapshot.data()?['pdfPath'];
       if (pdfPath != null) {
@@ -113,6 +116,18 @@ class WarehouseService {
     } catch (e) {
       debugPrint('Failed to mark as printed: $e');
       rethrow;
+    }
+  }
+
+  Future<void> _updateTransactionPrintStatus(String invoiceId) async {
+    try {
+      await _firestore.collection('transactions').doc(invoiceId).update({
+        'isPrinted': true,
+      });
+    } catch (e) {
+      debugPrint('Failed to update transaction print status: $e');
+      // We don't rethrow here as this is a secondary action
+      // and shouldn't fail the printing process if it fails
     }
   }
 

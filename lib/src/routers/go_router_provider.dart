@@ -20,6 +20,8 @@ import 'package:tablets/src/routers/go_router_refresh_stream.dart';
 import 'package:tablets/src/features/authentication/view/login_screen.dart';
 import 'package:tablets/src/routers/not_found_screen.dart';
 import 'package:tablets/src/features/warehouse/view/warehouse_print_screen.dart';
+import 'package:tablets/src/features/transactions/view/invoice_validation_results_screen.dart';
+import 'package:tablets/src/features/transactions/view/missing_transactions_results_screen.dart';
 
 enum AppRoute {
   home,
@@ -38,6 +40,8 @@ enum AppRoute {
   supplierDiscount,
   weeklyTasks,
   warehouse,
+  invoiceValidationResults,
+  missingTransactionsResults,
 }
 
 final firebaseAuthProvider = Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
@@ -145,6 +149,16 @@ final goRouterProvider = Provider<GoRouter>(
           path: '/warehouse',
           name: AppRoute.warehouse.name,
           builder: (BuildContext context, GoRouterState state) => const WarehousePrintScreen(),
+        ),
+        GoRoute(
+          path: '/invoice-validation-results',
+          name: AppRoute.invoiceValidationResults.name,
+          builder: (BuildContext context, GoRouterState state) => const InvoiceValidationResultsScreen(),
+        ),
+        GoRoute(
+          path: '/missing-transactions-results',
+          name: AppRoute.missingTransactionsResults.name,
+          builder: (BuildContext context, GoRouterState state) => const MissingTransactionsResultsScreen(),
         ),
       ],
       errorBuilder: (context, state) => const NotFoundScreen(),
