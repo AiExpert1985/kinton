@@ -310,9 +310,19 @@ class TransactionForm extends ConsumerWidget {
     // database matches the printed transaction.
     // isPrinted must be set BEFORE saveTransaction to avoid race condition with subsequent saves
     formDataNotifier.updateProperties({isPrintedKey: true});
-    final success =
-        await saveTransaction(context, ref, formDataNotifier.data, true);
-    if (!success || !context.mounted) return;
+    // Add timeout to prevent app freezing if save hangs (e.g. unstable internet)
+    bool success;
+    try {
+      success = await saveTransaction(context, ref, formDataNotifier.data, true)
+          .timeout(const Duration(seconds: 15), onTimeout: () => false);
+    } catch (e) {
+      success = false;
+    }
+    if (!context.mounted) return;
+    if (!success) {
+      failureUserMessage(context, 'فشل حفظ التعامل قبل الطباعة');
+      return;
+    }
     printForm(context, ref, formDataNotifier.data, isLogoB: isLogoB);
   }
 
@@ -426,8 +436,9 @@ class TransactionForm extends ConsumerWidget {
       final transactionDbCache = ref.read(transactionDbCacheProvider.notifier);
       final screenController = ref.read(transactionScreenControllerProvider);
 
-      // Check if this is the last transaction and decrement counter
-      await _decrementCounterIfLastTransaction(ref, formData);
+      // Decrement counter in background - not critical for transaction flow
+      // ignore: unawaited_futures
+      _decrementCounterIfLastTransaction(ref, formData);
 
       if (!context.mounted) return false;
       return await deleteTransaction(
@@ -648,8 +659,9 @@ class TransactionForm extends ConsumerWidget {
       screenController.setFeatureScreenData(context);
     }
 
-    // Update counter if transaction number is >= current counter
-    await _updateCounterIfNeeded(ref, formDataCopy);
+    // Update counter in background - not critical for transaction save
+    // ignore: unawaited_futures
+    _updateCounterIfNeeded(ref, formDataCopy);
 
     // PRE-CALCULATE affected entities synchronously while context is still valid
     final cacheUpdateService = ref.read(screenCacheUpdateServiceProvider);

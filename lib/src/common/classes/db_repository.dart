@@ -84,87 +84,30 @@ class DbRepository {
   }
 
   /// Returns true if update succeeded, false if failed
+  /// Uses doc(dbRef).set() to avoid silent failures from cache query misses
   Future<bool> updateItem(BaseItem updatedItem) async {
-    final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult.contains(ConnectivityResult.wifi) ||
-        connectivityResult.contains(ConnectivityResult.ethernet) ||
-        connectivityResult.contains(ConnectivityResult.vpn) ||
-        connectivityResult.contains(ConnectivityResult.mobile)) {
-      // Device is connected to the internet
-      try {
-        final query = _firestore
-            .collection(_collectionName)
-            .where(_dbReferenceKey, isEqualTo: updatedItem.dbRef);
-        final querySnapshot =
-            await query.get(const GetOptions(source: Source.cache));
-        if (querySnapshot.size > 0) {
-          final documentRef = querySnapshot.docs[0].reference;
-          await documentRef.update(updatedItem.toMap());
-          debugLog('Item updated in live firestore successfully!');
-        }
-        return true;
-      } catch (e) {
-        errorPrint('Error updating item in live firestore: $e');
-        return false;
-      }
-    }
-    // when offline - Firestore handles offline persistence
     try {
-      final query = _firestore
+      await _firestore
           .collection(_collectionName)
-          .where(_dbReferenceKey, isEqualTo: updatedItem.dbRef);
-      final querySnapshot =
-          await query.get(const GetOptions(source: Source.cache));
-      if (querySnapshot.size > 0) {
-        final documentRef = querySnapshot.docs[0].reference;
-        await documentRef.update(updatedItem.toMap());
-        tempPrint('Item updated in firestore cache!');
-      }
-      return true; // Offline write counts as success (will sync later)
+          .doc(updatedItem.dbRef)
+          .set(updatedItem.toMap());
+      debugLog('Item updated successfully!');
+      return true;
     } catch (e) {
-      errorPrint('Error updating item in firebase cache: $e');
+      errorPrint('Error updating item in firestore: $e');
       return false;
     }
   }
 
   /// Returns true if delete succeeded, false if failed
+  /// Uses doc(dbRef).delete() to avoid silent failures from cache query misses
   Future<bool> deleteItem(BaseItem item) async {
-    final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult.contains(ConnectivityResult.wifi) ||
-        connectivityResult.contains(ConnectivityResult.ethernet) ||
-        connectivityResult.contains(ConnectivityResult.vpn) ||
-        connectivityResult.contains(ConnectivityResult.mobile)) {
-      // Device is connected to the internet
-      try {
-        final querySnapshot = await _firestore
-            .collection(_collectionName)
-            .where(_dbReferenceKey, isEqualTo: item.dbRef)
-            .get(const GetOptions(source: Source.cache));
-        if (querySnapshot.size > 0) {
-          final documentRef = querySnapshot.docs[0].reference;
-          await documentRef.delete();
-          tempPrint('Item deleted from live firestore successfully!');
-        }
-        return true;
-      } catch (e) {
-        errorPrint('Error deleting item from firestore cache: $e');
-        return false;
-      }
-    }
-    // when offline - Firestore handles offline persistence
     try {
-      final querySnapshot = await _firestore
-          .collection(_collectionName)
-          .where(_dbReferenceKey, isEqualTo: item.dbRef)
-          .get(const GetOptions(source: Source.cache));
-      if (querySnapshot.size > 0) {
-        final documentRef = querySnapshot.docs[0].reference;
-        await documentRef.delete();
-        tempPrint('Item deleted from firestore cache!');
-      }
-      return true; // Offline write counts as success (will sync later)
+      await _firestore.collection(_collectionName).doc(item.dbRef).delete();
+      debugLog('Item deleted successfully!');
+      return true;
     } catch (e) {
-      errorPrint('Error deleting item from firestore cache: $e');
+      errorPrint('Error deleting item from firestore: $e');
       return false;
     }
   }
