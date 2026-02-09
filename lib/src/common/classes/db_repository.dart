@@ -15,7 +15,11 @@ class DbRepository {
   /// With persistence enabled, writes go to local cache first and sync in background
   Future<bool> addItem(BaseItem item) async {
     try {
-      await _firestore.collection(_collectionName).doc(item.dbRef).set(item.toMap());
+      await _firestore
+          .collection(_collectionName)
+          .doc(item.dbRef)
+          .set(item.toMap())
+          .timeout(const Duration(seconds: 5));
       debugLog('Item added successfully!');
       return true;
     } catch (e) {
@@ -74,7 +78,8 @@ class DbRepository {
       await _firestore
           .collection(_collectionName)
           .doc(updatedItem.dbRef)
-          .set(updatedItem.toMap());
+          .set(updatedItem.toMap())
+          .timeout(const Duration(seconds: 5));
       debugLog('Item updated successfully!');
       return true;
     } catch (e) {
@@ -87,7 +92,11 @@ class DbRepository {
   /// Uses doc(dbRef).delete() to avoid silent failures from cache query misses
   Future<bool> deleteItem(BaseItem item) async {
     try {
-      await _firestore.collection(_collectionName).doc(item.dbRef).delete();
+      await _firestore
+          .collection(_collectionName)
+          .doc(item.dbRef)
+          .delete()
+          .timeout(const Duration(seconds: 5));
       debugLog('Item deleted successfully!');
       return true;
     } catch (e) {
