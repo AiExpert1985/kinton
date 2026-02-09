@@ -12,30 +12,14 @@ class DbRepository {
 
   /// Returns true if save succeeded, false if failed
   /// Uses dbRef as document ID to ensure idempotency (prevents duplicates)
+  /// With persistence enabled, writes go to local cache first and sync in background
   Future<bool> addItem(BaseItem item) async {
-    final connectivityResult = await Connectivity().checkConnectivity();
-    if (connectivityResult.contains(ConnectivityResult.wifi) ||
-        connectivityResult.contains(ConnectivityResult.ethernet) ||
-        connectivityResult.contains(ConnectivityResult.vpn) ||
-        connectivityResult.contains(ConnectivityResult.mobile)) {
-      // Device is connected to the internet
-      try {
-        await _firestore.collection(_collectionName).doc(item.dbRef).set(item.toMap());
-        tempPrint('Item added to live firestore successfully!');
-        return true;
-      } catch (e) {
-        errorPrint('Error adding item to live firestore: $e');
-        return false;
-      }
-    }
-    // Device is offline - Firestore handles offline persistence
     try {
-      final docRef = _firestore.collection(_collectionName).doc(item.dbRef);
-      await docRef.set(item.toMap());
-      tempPrint('Item added to firestore cache!');
-      return true; // Offline write counts as success (will sync later)
+      await _firestore.collection(_collectionName).doc(item.dbRef).set(item.toMap());
+      debugLog('Item added successfully!');
+      return true;
     } catch (e) {
-      errorPrint('Error adding item to firestore cache: $e');
+      errorPrint('Error adding item to firestore: $e');
       return false;
     }
   }
