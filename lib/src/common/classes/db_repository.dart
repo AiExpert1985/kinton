@@ -72,14 +72,29 @@ class DbRepository {
   }
 
   /// Returns true if update succeeded, false if failed
-  /// Uses doc(dbRef).set() to avoid silent failures from cache query misses
+  /// Queries Firestore cache first to find the actual document reference,
+  /// which handles documents where document ID differs from dbRef field
+  /// (e.g., documents created by mobile app with auto-generated IDs).
+  /// Falls back to direct doc(dbRef).set() if not found in cache.
   Future<bool> updateItem(BaseItem updatedItem) async {
     try {
-      await _firestore
+      final querySnapshot = await _firestore
           .collection(_collectionName)
-          .doc(updatedItem.dbRef)
-          .set(updatedItem.toMap())
+          .where(_dbReferenceKey, isEqualTo: updatedItem.dbRef)
+          .get(const GetOptions(source: Source.cache))
           .timeout(const Duration(seconds: 5));
+      if (querySnapshot.docs.isNotEmpty) {
+        await querySnapshot.docs.first.reference
+            .set(updatedItem.toMap())
+            .timeout(const Duration(seconds: 5));
+      } else {
+        // Document not in cache - use direct document ID
+        await _firestore
+            .collection(_collectionName)
+            .doc(updatedItem.dbRef)
+            .set(updatedItem.toMap())
+            .timeout(const Duration(seconds: 5));
+      }
       debugLog('Item updated successfully!');
       return true;
     } catch (e) {
@@ -89,14 +104,29 @@ class DbRepository {
   }
 
   /// Returns true if delete succeeded, false if failed
-  /// Uses doc(dbRef).delete() to avoid silent failures from cache query misses
+  /// Queries Firestore cache first to find the actual document reference,
+  /// which handles documents where document ID differs from dbRef field
+  /// (e.g., documents created by mobile app with auto-generated IDs).
+  /// Falls back to direct doc(dbRef).delete() if not found in cache.
   Future<bool> deleteItem(BaseItem item) async {
     try {
-      await _firestore
+      final querySnapshot = await _firestore
           .collection(_collectionName)
-          .doc(item.dbRef)
-          .delete()
+          .where(_dbReferenceKey, isEqualTo: item.dbRef)
+          .get(const GetOptions(source: Source.cache))
           .timeout(const Duration(seconds: 5));
+      if (querySnapshot.docs.isNotEmpty) {
+        await querySnapshot.docs.first.reference
+            .delete()
+            .timeout(const Duration(seconds: 5));
+      } else {
+        // Document not in cache - try direct delete by document ID as fallback
+        await _firestore
+            .collection(_collectionName)
+            .doc(item.dbRef)
+            .delete()
+            .timeout(const Duration(seconds: 5));
+      }
       debugLog('Item deleted successfully!');
       return true;
     } catch (e) {
