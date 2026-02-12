@@ -587,7 +587,7 @@ class SettingsDialog extends ConsumerWidget {
             const SizedBox(height: 20),
             const InvoiceValidationButton(),
             const SizedBox(height: 20),
-            const MissingTransactionsDetectionButton(),
+            const PrintLogButton(),
           ],
         ),
       ),
@@ -745,6 +745,36 @@ class _InvoiceValidationButtonState
   }
 }
 
+class PrintLogButton extends ConsumerWidget {
+  const PrintLogButton({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      height: 125,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).pop(); // Close settings dialog
+          context.goNamed(AppRoute.printLog.name);
+        },
+        child: const Card(
+          elevation: 4,
+          margin: EdgeInsets.all(16),
+          child: SizedBox(
+            height: 40,
+            child: Center(
+              child: Text(
+                'سجل الطباعة',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class MissingTransactionsDetectionButton extends ConsumerStatefulWidget {
   const MissingTransactionsDetectionButton({super.key});
 
@@ -892,8 +922,24 @@ class _MissingTransactionsDetectionButtonState
         });
 
         if (success) {
-          // Always navigate to results screen
-          Navigator.of(context).pop(); // Close settings dialog
+          // Phase 2: detect missing from print log and merge results
+          final printLogMissing = detectMissingFromPrintLog(ref);
+          if (printLogMissing.isNotEmpty) {
+            final currentResults = ref.read(missingTransactionsProvider);
+            // Avoid duplicates: only add print-log entries not already found in backup
+            final existingDbRefs = <String>{};
+            for (final m in currentResults) {
+              final dbRef = m.fullTransactionData['dbRef']?.toString();
+              if (dbRef != null) existingDbRefs.add(dbRef);
+            }
+            final newFromLog = printLogMissing.where((m) {
+              final dbRef = m.fullTransactionData['dbRef']?.toString();
+              return dbRef != null && !existingDbRefs.contains(dbRef);
+            }).toList();
+            ref.read(missingTransactionsProvider.notifier).state =
+                [...currentResults, ...newFromLog];
+          }
+          // Navigate to results screen
           context.goNamed(AppRoute.missingTransactionsResults.name);
         }
       }

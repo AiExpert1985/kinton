@@ -44,6 +44,7 @@ import 'package:cloud_firestore/cloud_firestore.dart' as firebase;
 import 'package:tablets/src/features/warehouse/services/warehouse_service.dart';
 import 'package:tablets/src/features/counters/repository/counter_repository_provider.dart';
 import 'package:tablets/src/common/providers/screen_cache_update_service.dart';
+import 'package:tablets/src/features/print_log/print_log_service.dart';
 
 final Map<String, dynamic> transactionFormDimenssions = {
   TransactionType.customerInvoice.name: {'height': 1100, 'width': 900},
@@ -323,6 +324,7 @@ class TransactionForm extends ConsumerWidget {
       failureUserMessage(context, 'فشل حفظ التعامل قبل الطباعة');
       return;
     }
+    ref.read(printLogServiceProvider).logPrint(formDataNotifier.data, 'local');
     printForm(context, ref, formDataNotifier.data, isLogoB: isLogoB);
   }
 
@@ -346,6 +348,7 @@ class TransactionForm extends ConsumerWidget {
     final pdf = await getPdfFile(context, ref, formDataNotifier.data, image);
     if (!context.mounted) return;
 
+    ref.read(printLogServiceProvider).logPrint(formDataNotifier.data, 'warehouse');
     final warehouseService = ref.read(warehouseServiceProvider);
     if (context.mounted) {
       await warehouseService.sendToWarehouse(
