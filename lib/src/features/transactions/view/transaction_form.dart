@@ -46,6 +46,9 @@ import 'package:tablets/src/features/counters/repository/counter_repository_prov
 import 'package:tablets/src/common/providers/screen_cache_update_service.dart';
 import 'package:tablets/src/features/print_log/print_log_service.dart';
 
+/// Tracks whether an action button (print, delete, warehouse) is processing
+final formIsProcessingProvider = StateProvider<bool>((ref) => false);
+
 final Map<String, dynamic> transactionFormDimenssions = {
   TransactionType.customerInvoice.name: {'height': 1100, 'width': 900},
   TransactionType.vendorInvoice.name: {'height': 1000, 'width': 800},
@@ -156,6 +159,7 @@ class TransactionForm extends ConsumerWidget {
     ref.watch(imagePickerProvider);
     ref.watch(transactionFormDataProvider);
     ref.watch(textFieldsControllerProvider);
+    final isProcessing = ref.watch(formIsProcessingProvider);
     final formDimenssions = _getFormDimenssions(transactionType);
     final height = formDimenssions?['height'] ?? 1000;
     final width = formDimenssions?['width'] ?? 1000;
@@ -187,15 +191,17 @@ class TransactionForm extends ConsumerWidget {
             // formKey: formController.formKey,
             // formKey: GlobalKey<FormState>(),
             fields: _getFormWidget(context, transactionType, ref),
-            buttons: _actionButtons(
-                context,
-                formController,
-                formDataNotifier,
-                formImagesNotifier,
-                dbCache,
-                screenController,
-                formNavigation,
-                ref),
+            buttons: isProcessing
+                ? [const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))]
+                : _actionButtons(
+                    context,
+                    formController,
+                    formDataNotifier,
+                    formImagesNotifier,
+                    dbCache,
+                    screenController,
+                    formNavigation,
+                    ref),
             width: width,
             height: height,
           ),
@@ -220,6 +226,7 @@ class TransactionForm extends ConsumerWidget {
     return [
       IconButton(
         onPressed: () {
+          ref.read(formIsProcessingProvider.notifier).state = true;
           formNavigation.isReadOnly = false;
           onNavigationPressed(formDataNotifier, context, ref,
               formImagesNotifier, formNavigation,
@@ -244,6 +251,7 @@ class TransactionForm extends ConsumerWidget {
       if (!formNavigation.isReadOnly)
         IconButton(
           onPressed: () {
+            ref.read(formIsProcessingProvider.notifier).state = true;
             formNavigation.isReadOnly = true;
             deleteTransaction(
                 context,
@@ -258,10 +266,14 @@ class TransactionForm extends ConsumerWidget {
           icon: const DeleteIcon(),
         ),
       IconButton(
-        onPressed: () {
-          _onPrintPressed(context, ref, formDataNotifier);
+        onPressed: () async {
+          ref.read(formIsProcessingProvider.notifier).state = true;
+          await _onPrintPressed(context, ref, formDataNotifier);
           // if not printed due to empty name, don't continue
-          if (!formDataNotifier.getProperty(isPrintedKey)) return;
+          if (!formDataNotifier.getProperty(isPrintedKey)) {
+            ref.read(formIsProcessingProvider.notifier).state = false;
+            return;
+          }
           formNavigation.isReadOnly = true;
           // TODO navigation to self  is added only to layout rebuild because formNavigation is not stateNotifier
           // TODO later I might change formNavigation to StateNotifier and watch it in this widget
@@ -272,32 +284,30 @@ class TransactionForm extends ConsumerWidget {
         },
         icon: const PrintIcon(),
       ),
-      IconButton(
-        onPressed: () {
-          _onPrintPressed(context, ref, formDataNotifier, isLogoB: true);
-          // if not printed due to empty name, don't continue
-          if (!formDataNotifier.getProperty(isPrintedKey)) return;
-          formNavigation.isReadOnly = true;
-          // TODO navigation to self  is added only to layout rebuild because formNavigation is not stateNotifier
-          // TODO later I might change formNavigation to StateNotifier and watch it in this widget
-          final formData = formDataNotifier.data;
-          onNavigationPressed(formDataNotifier, context, ref,
-              formImagesNotifier, formNavigation,
-              targetTransactionData: formData);
-        },
-        icon: const PrintIconB(),
-      ),
+      // Print 2 button - hidden for now, may be re-enabled later
+      const Visibility(visible: false, child: IconButton(
+        onPressed: null,
+        icon: PrintIconB(),
+      )),
       if (transactionType == TransactionType.customerInvoice.name)
         IconButton(
-            onPressed: () {
-              _onSendToWarehousePressed(
+            onPressed: () async {
+              ref.read(formIsProcessingProvider.notifier).state = true;
+              await _onSendToWarehousePressed(
                   context, ref, formDataNotifier, formImagesNotifier);
+              formNavigation.isReadOnly = true;
+              final formData = formDataNotifier.data;
+              if (context.mounted) {
+                onNavigationPressed(formDataNotifier, context, ref,
+                    formImagesNotifier, formNavigation,
+                    targetTransactionData: formData);
+              }
             },
             icon: const SendIcon()),
     ];
   }
 
-  void _onPrintPressed(
+  Future<void> _onPrintPressed(
       BuildContext context, WidgetRef ref, ItemFormData formDataNotifier,
       {bool isLogoB = false}) async {
     if (formDataNotifier.data[nameKey] == '') {
@@ -328,7 +338,7 @@ class TransactionForm extends ConsumerWidget {
     printForm(context, ref, formDataNotifier.data, isLogoB: isLogoB);
   }
 
-  void _onSendToWarehousePressed(
+  Future<void> _onSendToWarehousePressed(
       BuildContext context,
       WidgetRef ref,
       ItemFormData formDataNotifier,

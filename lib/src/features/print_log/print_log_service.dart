@@ -18,20 +18,26 @@ class PrintLogEntry {
   });
 
   Map<String, dynamic> toJson() {
-    // Convert transaction data - handle Timestamp and DateTime
-    final transactionCopy = Map<String, dynamic>.from(transaction);
-    if (transactionCopy['date'] is Timestamp) {
-      transactionCopy['date'] =
-          (transactionCopy['date'] as Timestamp).toDate().toIso8601String();
-    } else if (transactionCopy['date'] is DateTime) {
-      transactionCopy['date'] =
-          (transactionCopy['date'] as DateTime).toIso8601String();
-    }
+    final transactionCopy = _deepConvert(transaction);
     return {
       'transaction': transactionCopy,
       'printTime': printTime.toIso8601String(),
       'printType': printType,
     };
+  }
+
+  /// Recursively convert all Timestamp/DateTime values to ISO strings
+  /// so that jsonEncode can handle them
+  static dynamic _deepConvert(dynamic value) {
+    if (value is Timestamp) return value.toDate().toIso8601String();
+    if (value is DateTime) return value.toIso8601String();
+    if (value is Map) {
+      return value.map((k, v) => MapEntry(k, _deepConvert(v)));
+    }
+    if (value is List) {
+      return value.map(_deepConvert).toList();
+    }
+    return value;
   }
 
   factory PrintLogEntry.fromJson(Map<String, dynamic> json) {
