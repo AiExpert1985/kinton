@@ -529,6 +529,8 @@ class _PrintLogScreenState extends ConsumerState<PrintLogScreen> {
   void _showTransaction(BuildContext context, PrintLogEntry entry) {
     try {
       final transactionData = Map<String, dynamic>.from(entry.transaction);
+      // Provide default for imageUrls - older log entries may not have it
+      transactionData['imageUrls'] ??= <String>[];
       // Convert date from ISO string to DateTime if needed
       if (transactionData['date'] is String) {
         final parsed = DateTime.tryParse(transactionData['date']);

@@ -321,7 +321,9 @@ class TransactionForm extends ConsumerWidget {
       failureUserMessage(context, 'فشل حفظ التعامل قبل الطباعة');
       return;
     }
-    ref.read(printLogServiceProvider).logPrint(formDataNotifier.data, 'local');
+    ref.read(printLogServiceProvider).logPrint(
+        {...formDataNotifier.data, 'imageUrls': ref.read(imagePickerProvider)},
+        'local');
     printForm(context, ref, formDataNotifier.data, isLogoB: isLogoB);
   }
 
@@ -345,7 +347,9 @@ class TransactionForm extends ConsumerWidget {
     final pdf = await getPdfFile(context, ref, formDataNotifier.data, image);
     if (!context.mounted) return;
 
-    ref.read(printLogServiceProvider).logPrint(formDataNotifier.data, 'warehouse');
+    ref.read(printLogServiceProvider).logPrint(
+        {...formDataNotifier.data, 'imageUrls': ref.read(imagePickerProvider)},
+        'warehouse');
     final warehouseService = ref.read(warehouseServiceProvider);
     if (context.mounted) {
       await warehouseService.sendToWarehouse(
