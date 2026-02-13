@@ -30,6 +30,8 @@ class _PrintLogScreenState extends ConsumerState<PrintLogScreen> {
   final TextEditingController _nameController = TextEditingController();
   String? _selectedType;
   DateTime? _selectedDate;
+  DateTime? _selectedPrintDate;
+  String? _selectedPrintType;
 
   @override
   void initState() {
@@ -80,7 +82,7 @@ class _PrintLogScreenState extends ConsumerState<PrintLogScreen> {
           .toList();
     }
 
-    // Filter by date
+    // Filter by transaction date
     if (_selectedDate != null) {
       filtered = filtered.where((e) {
         final entryDate = _parseTransactionDate(e.transaction['date']);
@@ -89,6 +91,21 @@ class _PrintLogScreenState extends ConsumerState<PrintLogScreen> {
             entryDate.month == _selectedDate!.month &&
             entryDate.day == _selectedDate!.day;
       }).toList();
+    }
+
+    // Filter by print date
+    if (_selectedPrintDate != null) {
+      filtered = filtered.where((e) {
+        return e.printTime.year == _selectedPrintDate!.year &&
+            e.printTime.month == _selectedPrintDate!.month &&
+            e.printTime.day == _selectedPrintDate!.day;
+      }).toList();
+    }
+
+    // Filter by print type
+    if (_selectedPrintType != null && _selectedPrintType!.isNotEmpty) {
+      filtered =
+          filtered.where((e) => e.printType == _selectedPrintType).toList();
     }
 
     ref.read(filteredPrintLogEntriesProvider.notifier).state = filtered;
@@ -106,6 +123,8 @@ class _PrintLogScreenState extends ConsumerState<PrintLogScreen> {
     setState(() {
       _selectedType = null;
       _selectedDate = null;
+      _selectedPrintDate = null;
+      _selectedPrintType = null;
     });
     ref.read(filteredPrintLogEntriesProvider.notifier).state =
         ref.read(printLogEntriesProvider);
@@ -125,7 +144,9 @@ class _PrintLogScreenState extends ConsumerState<PrintLogScreen> {
     final hasFilters = _numberController.text.isNotEmpty ||
         _nameController.text.isNotEmpty ||
         _selectedType != null ||
-        _selectedDate != null;
+        _selectedDate != null ||
+        _selectedPrintDate != null ||
+        _selectedPrintType != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -139,11 +160,8 @@ class _PrintLogScreenState extends ConsumerState<PrintLogScreen> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Filters row
-            _buildFilters(context, hasFilters),
-            VerticalGap.l,
-            // Table header
-            _buildTableHeader(),
+            // Table header with filters
+            _buildHeaderWithFilters(context, hasFilters),
             const Divider(thickness: 2),
             // Table data
             Expanded(
@@ -181,147 +199,246 @@ class _PrintLogScreenState extends ConsumerState<PrintLogScreen> {
     );
   }
 
-  Widget _buildFilters(BuildContext context, bool hasFilters) {
-    return Row(
-      children: [
-        hasFilters
-            ? IconButton(
-                onPressed: _clearFilters,
-                icon: const Icon(Icons.cancel_outlined, color: Colors.red))
-            : const SizedBox(width: 40),
-        HorizontalGap.l,
-        // Transaction type filter
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            value: _selectedType,
-            hint: const Text('نوع التعامل'),
-            isExpanded: true,
-            items: [
-              'customerInvoice',
-              'customerReceipt',
-              'customerReturn',
-              'vendorInvoice',
-              'vendorReceipt',
-              'vendorReturn',
-              'expenditures',
-              'gifts',
-              'damagedItems',
-            ]
-                .map((type) => DropdownMenuItem(
-                      value: type,
-                      child: Text(translateDbTextToScreenText(context, type)),
-                    ))
-                .toList(),
-            onChanged: (value) {
-              setState(() => _selectedType = value);
-              _applyFilters();
-            },
-          ),
-        ),
-        HorizontalGap.l,
-        // Number filter
-        Expanded(
-          child: TextField(
-            controller: _numberController,
-            decoration: const InputDecoration(
-              hintText: 'رقم التعامل',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            ),
-            textAlign: TextAlign.center,
-            onSubmitted: (_) => _applyFilters(),
-          ),
-        ),
-        HorizontalGap.l,
-        // Customer name filter
-        Expanded(
-          child: TextField(
-            controller: _nameController,
-            decoration: const InputDecoration(
-              hintText: 'اسم الزبون',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            ),
-            textAlign: TextAlign.center,
-            onSubmitted: (_) => _applyFilters(),
-          ),
-        ),
-        HorizontalGap.l,
-        // Date filter
-        Expanded(
-          child: InkWell(
-            onTap: () async {
-              final date = await showDatePicker(
-                context: context,
-                initialDate: _selectedDate ?? DateTime.now(),
-                firstDate: DateTime(2020),
-                lastDate: DateTime.now(),
-              );
-              if (date != null) {
-                setState(() => _selectedDate = date);
-                _applyFilters();
-              }
-            },
-            child: InputDecorator(
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              ),
-              child: Text(
-                _selectedDate != null
-                    ? DateFormat('dd-MM-yyyy').format(_selectedDate!)
-                    : 'التاريخ',
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _buildHeaderWithFilters(BuildContext context, bool hasFilters) {
+    const headerStyle = TextStyle(fontWeight: FontWeight.bold);
+    const filterPadding = EdgeInsets.symmetric(horizontal: 4);
 
-  Widget _buildTableHeader() {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
       color: Colors.grey[200],
-      child: const Row(
+      child: Column(
         children: [
-          SizedBox(
-              width: 40,
-              child: Text('#',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center)),
-          Expanded(
-              flex: 2,
-              child: Text('نوع التعامل',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center)),
-          Expanded(
-              flex: 1,
-              child: Text('الرقم',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center)),
-          Expanded(
-              flex: 2,
-              child: Text('اسم الزبون',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center)),
-          Expanded(
-              flex: 1,
-              child: Text('تاريخ التعامل',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center)),
-          Expanded(
-              flex: 2,
-              child: Text('تاريخ الطباعة',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center)),
-          Expanded(
-              flex: 1,
-              child: Text('نوع الطباعة',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center)),
+          // Header labels
+          Row(
+            children: [
+              SizedBox(
+                  width: 40,
+                  child: hasFilters
+                      ? IconButton(
+                          onPressed: _clearFilters,
+                          icon: const Icon(Icons.cancel_outlined,
+                              color: Colors.red, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        )
+                      : const Text('#',
+                          style: headerStyle, textAlign: TextAlign.center)),
+              const Expanded(
+                  flex: 2,
+                  child: Text('نوع التعامل',
+                      style: headerStyle, textAlign: TextAlign.center)),
+              const Expanded(
+                  flex: 1,
+                  child: Text('الرقم',
+                      style: headerStyle, textAlign: TextAlign.center)),
+              const Expanded(
+                  flex: 2,
+                  child: Text('اسم الزبون',
+                      style: headerStyle, textAlign: TextAlign.center)),
+              const Expanded(
+                  flex: 1,
+                  child: Text('تاريخ التعامل',
+                      style: headerStyle, textAlign: TextAlign.center)),
+              const Expanded(
+                  flex: 2,
+                  child: Text('تاريخ الطباعة',
+                      style: headerStyle, textAlign: TextAlign.center)),
+              const Expanded(
+                  flex: 1,
+                  child: Text('نوع الطباعة',
+                      style: headerStyle, textAlign: TextAlign.center)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Filter row
+          Row(
+            children: [
+              const SizedBox(width: 40),
+              // Transaction type dropdown
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: filterPadding,
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedType,
+                    hint: const Text('الكل', style: TextStyle(fontSize: 12)),
+                    isExpanded: true,
+                    isDense: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    ),
+                    items: [
+                      'customerInvoice',
+                      'customerReceipt',
+                      'customerReturn',
+                      'vendorInvoice',
+                      'vendorReceipt',
+                      'vendorReturn',
+                      'expenditures',
+                      'gifts',
+                      'damagedItems',
+                    ]
+                        .map((type) => DropdownMenuItem(
+                              value: type,
+                              child: Text(
+                                  translateDbTextToScreenText(context, type),
+                                  style: const TextStyle(fontSize: 12)),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() => _selectedType = value);
+                      _applyFilters();
+                    },
+                  ),
+                ),
+              ),
+              // Number filter
+              Expanded(
+                flex: 1,
+                child: Padding(
+                  padding: filterPadding,
+                  child: TextField(
+                    controller: _numberController,
+                    decoration: const InputDecoration(
+                      hintText: '...',
+                      hintStyle: TextStyle(fontSize: 12),
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12),
+                    onChanged: (_) => _applyFilters(),
+                  ),
+                ),
+              ),
+              // Customer name filter
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: filterPadding,
+                  child: TextField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(
+                      hintText: '...',
+                      hintStyle: TextStyle(fontSize: 12),
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 12),
+                    onChanged: (_) => _applyFilters(),
+                  ),
+                ),
+              ),
+              // Transaction date filter
+              Expanded(
+                flex: 1,
+                child: Padding(
+                  padding: filterPadding,
+                  child: InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (date != null) {
+                        setState(() => _selectedDate = date);
+                        _applyFilters();
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      ),
+                      child: Text(
+                        _selectedDate != null
+                            ? DateFormat('dd-MM-yyyy').format(_selectedDate!)
+                            : '...',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Print date filter
+              Expanded(
+                flex: 2,
+                child: Padding(
+                  padding: filterPadding,
+                  child: InkWell(
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedPrintDate ?? DateTime.now(),
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now(),
+                      );
+                      if (date != null) {
+                        setState(() => _selectedPrintDate = date);
+                        _applyFilters();
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                      ),
+                      child: Text(
+                        _selectedPrintDate != null
+                            ? DateFormat('dd-MM-yyyy')
+                                .format(_selectedPrintDate!)
+                            : '...',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 11),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Print type dropdown
+              Expanded(
+                flex: 1,
+                child: Padding(
+                  padding: filterPadding,
+                  child: DropdownButtonFormField<String>(
+                    value: _selectedPrintType,
+                    hint: const Text('الكل', style: TextStyle(fontSize: 12)),
+                    isExpanded: true,
+                    isDense: true,
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                      contentPadding:
+                          EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'local',
+                          child: Text('طباعة محلية',
+                              style: TextStyle(fontSize: 12))),
+                      DropdownMenuItem(
+                          value: 'warehouse',
+                          child: Text('ارسال للمخزن',
+                              style: TextStyle(fontSize: 12))),
+                    ],
+                    onChanged: (value) {
+                      setState(() => _selectedPrintType = value);
+                      _applyFilters();
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
