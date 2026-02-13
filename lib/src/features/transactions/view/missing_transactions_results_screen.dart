@@ -118,6 +118,8 @@ class MissingTransactionsResultsScreen extends ConsumerWidget {
                               InkWell(
                                 onTap: () {
                                   final transactionData = Map<String, dynamic>.from(missing.fullTransactionData);
+                                  // Provide default for imageUrls if missing (older print-log entries)
+                                  transactionData['imageUrls'] ??= <String>[];
                                   // Convert date from String to DateTime
                                   if (transactionData['date'] is String) {
                                     final dateStr = transactionData['date'] as String;

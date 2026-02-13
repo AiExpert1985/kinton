@@ -528,16 +528,26 @@ Future<bool> restoreMissingTransaction(
     // Prepare transaction data
     final transactionData = Map<String, dynamic>.from(missingTransaction.fullTransactionData);
 
-    // Convert date from String (DD-MM-YYYY) to DateTime
+    // Convert date from String to DateTime (handles ISO and DD-MM-YYYY)
     if (transactionData['date'] is String) {
       final dateStr = transactionData['date'] as String;
-      final parts = dateStr.split('-');
-      transactionData['date'] = DateTime(
-        int.parse(parts[2]), // year
-        int.parse(parts[1]), // month
-        int.parse(parts[0]), // day
-      );
+      final parsed = DateTime.tryParse(dateStr);
+      if (parsed != null) {
+        transactionData['date'] = parsed;
+      } else {
+        final parts = dateStr.split('-');
+        if (parts.length == 3) {
+          transactionData['date'] = DateTime(
+            int.parse(parts[2]),
+            int.parse(parts[1]),
+            int.parse(parts[0]),
+          );
+        }
+      }
     }
+
+    // Provide default for imageUrls if missing (older print-log entries)
+    transactionData['imageUrls'] ??= <String>[];
 
     // Create Transaction object
     final transaction = Transaction.fromMap(transactionData);
