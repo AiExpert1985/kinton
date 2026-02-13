@@ -1,4 +1,4 @@
-import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -540,54 +540,108 @@ class SettingsDialog extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final List<String> names = [
-      S.of(context).categories,
-      S.of(context).regions,
-      S.of(context).settings,
-      S.of(context).deleted_transactions,
-      'تخفيضات المجهز'
-    ];
-
-    final List<String> routes = [
-      AppRoute.categories.name,
-      AppRoute.regions.name,
-      AppRoute.settings.name,
-      AppRoute.deletedTransactions.name,
-      AppRoute.supplierDiscount.name
-    ];
-
     return AlertDialog(
       alignment: Alignment.center,
       scrollable: true,
       content: Container(
-        padding: const EdgeInsets.all(25),
-        width: 400, // Increased width for two columns
-        height: 800,
+        padding: const EdgeInsets.all(16),
+        width: 420,
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(
-              child: GridView.builder(
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2, // Changed to 2 columns
-                  childAspectRatio: 1.3, // Aspect ratio of each card
-                  crossAxisSpacing: 10, // Space between columns
-                  mainAxisSpacing: 10, // Space between rows
+            // Navigation buttons grid
+            GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              childAspectRatio: 1.0,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              children: [
+                _SettingsGridItem(
+                  icon: Icons.category,
+                  label: S.of(context).categories,
+                  onTap: () => _navigateTo(context, ref, S.of(context).categories, AppRoute.categories.name),
                 ),
-                itemCount: names.length,
-                itemBuilder: (context, index) {
-                  return SettingChildButton(names[index], routes[index]);
-                },
-              ),
+                _SettingsGridItem(
+                  icon: Icons.map,
+                  label: S.of(context).regions,
+                  onTap: () => _navigateTo(context, ref, S.of(context).regions, AppRoute.regions.name),
+                ),
+                _SettingsGridItem(
+                  icon: Icons.settings,
+                  label: S.of(context).settings,
+                  onTap: () => _navigateTo(context, ref, S.of(context).settings, AppRoute.settings.name),
+                ),
+                _SettingsGridItem(
+                  icon: Icons.delete_outline,
+                  label: S.of(context).deleted_transactions,
+                  onTap: () => _navigateTo(context, ref, S.of(context).deleted_transactions, AppRoute.deletedTransactions.name),
+                ),
+                _SettingsGridItem(
+                  icon: Icons.discount,
+                  label: 'تخفيضات المجهز',
+                  onTap: () => _navigateTo(context, ref, 'تخفيضات المجهز', AppRoute.supplierDiscount.name),
+                ),
+                _SettingsGridItem(
+                  icon: Icons.print,
+                  label: 'سجل الطباعة',
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.goNamed(AppRoute.printLog.name);
+                  },
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            // Add the Bulk Customer Reassignment Button
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            // Action buttons
             const BulkCustomerReassignmentButton(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
             const BackupButton(),
-            const SizedBox(height: 20),
+            const SizedBox(height: 8),
             const InvoiceValidationButton(),
-            const SizedBox(height: 20),
-            const PrintLogButton(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _navigateTo(BuildContext context, WidgetRef ref, String title, String route) {
+    final pageTitleNotifier = ref.read(pageTitleProvider.notifier);
+    ref.read(categoryScreenControllerProvider).setFeatureScreenData(context);
+    ref.read(regionScreenControllerProvider).setFeatureScreenData(context);
+    ref.read(deletedTransactionScreenControllerProvider).setFeatureScreenData(context);
+    pageTitleNotifier.state = title;
+    if (context.mounted) context.goNamed(route);
+    if (context.mounted) Navigator.of(context).pop();
+  }
+}
+
+class _SettingsGridItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const _SettingsGridItem({required this.icon, required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 32, color: Theme.of(context).primaryColor),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13),
+            ),
           ],
         ),
       ),
@@ -595,51 +649,6 @@ class SettingsDialog extends ConsumerWidget {
   }
 }
 
-class SettingChildButton extends ConsumerWidget {
-  const SettingChildButton(this.name, this.route, {super.key});
-
-  final String name;
-  final String route;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final pageTitleNotifier = ref.read(pageTitleProvider.notifier);
-    final categoryScreenController = ref.read(categoryScreenControllerProvider);
-    final regionScreenController = ref.read(regionScreenControllerProvider);
-    final deletedTransactionScreenController =
-        ref.read(deletedTransactionScreenControllerProvider);
-
-    return InkWell(
-      onTap: () {
-        categoryScreenController.setFeatureScreenData(context);
-        regionScreenController.setFeatureScreenData(context);
-        deletedTransactionScreenController.setFeatureScreenData(context);
-
-        pageTitleNotifier.state = name;
-        if (context.mounted) {
-          context.goNamed(route);
-        }
-        if (context.mounted) {
-          Navigator.of(context).pop();
-        }
-      },
-      child: Card(
-        elevation: 4,
-        margin: const EdgeInsets.all(16),
-        child: SizedBox(
-          height: 40, // Reduced height for the card
-          child: Center(
-            child: Text(
-              textAlign: TextAlign.center,
-              name, // Use the corresponding name
-              style: const TextStyle(fontSize: 18),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class BackupButton extends ConsumerWidget {
   const BackupButton({super.key});
@@ -647,24 +656,13 @@ class BackupButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return SizedBox(
-      height: 125,
-      child: InkWell(
-        onTap: () async {
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () async {
           await backupDataBase(context, ref);
         },
-        child: Card(
-          elevation: 4,
-          margin: const EdgeInsets.all(16),
-          child: SizedBox(
-            height: 40, // Reduced height for the card
-            child: Center(
-              child: Text(
-                S.of(context).save_data_backup, // Use the corresponding name
-                style: const TextStyle(fontSize: 18),
-              ),
-            ),
-          ),
-        ),
+        icon: const Icon(Icons.backup),
+        label: Text(S.of(context).save_data_backup),
       ),
     );
   }
@@ -685,91 +683,39 @@ class _InvoiceValidationButtonState
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 125,
-      child: InkWell(
-        onTap: _isValidating
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _isValidating
             ? null
             : () async {
-                setState(() {
-                  _isValidating = true;
-                });
-
+                setState(() => _isValidating = true);
                 try {
                   final mismatches = await validateCustomerInvoices(ref);
-
                   if (mounted) {
-                    setState(() {
-                      _isValidating = false;
-                    });
-
+                    setState(() => _isValidating = false);
                     ref.read(invoiceValidationResultsProvider.notifier).state =
                         mismatches;
-
                     if (context.mounted) {
-                      Navigator.of(context).pop(); // Close the dialog
+                      Navigator.of(context).pop();
                       context.goNamed(AppRoute.invoiceValidationResults.name);
                     }
                   }
                 } catch (e) {
                   if (mounted) {
-                    setState(() {
-                      _isValidating = false;
-                    });
+                    setState(() => _isValidating = false);
                     if (context.mounted) {
                       failureUserMessage(context, 'خطأ في المطابقة: $e');
                     }
                   }
                 }
               },
-        child: Card(
-          elevation: 4,
-          margin: const EdgeInsets.all(16),
-          child: SizedBox(
-            height: 40,
-            child: Center(
-              child: _isValidating
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text(
-                      'مطابقة مبالغ القوائم',
-                      style: TextStyle(fontSize: 18),
-                    ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class PrintLogButton extends ConsumerWidget {
-  const PrintLogButton({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return SizedBox(
-      height: 125,
-      child: InkWell(
-        onTap: () {
-          Navigator.of(context).pop(); // Close settings dialog
-          context.goNamed(AppRoute.printLog.name);
-        },
-        child: const Card(
-          elevation: 4,
-          margin: EdgeInsets.all(16),
-          child: SizedBox(
-            height: 40,
-            child: Center(
-              child: Text(
-                'سجل الطباعة',
-                style: TextStyle(fontSize: 18),
-              ),
-            ),
-          ),
-        ),
+        icon: _isValidating
+            ? const SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.fact_check),
+        label: const Text('مطابقة مبالغ القوائم'),
       ),
     );
   }
@@ -794,63 +740,48 @@ class _MissingTransactionsDetectionButtonState
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 125,
-      child: InkWell(
-        onTap: _isDetecting ? null : _startDetection,
-        child: Card(
-          elevation: 4,
-          margin: const EdgeInsets.all(16),
-          child: SizedBox(
-            height: 40,
-            child: Center(
-              child: _isDetecting
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text(
-                      'مطابقة القوائم مع النسخة الاحتياطية',
-                      style: TextStyle(fontSize: 18),
-                    ),
-            ),
-          ),
-        ),
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: _isDetecting ? null : _startDetection,
+        icon: _isDetecting
+            ? const SizedBox(
+                width: 18, height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : const Icon(Icons.search),
+        label: const Text('البحث عن القوائم المفقودة'),
       ),
     );
   }
 
+  List<String> _getBackupFiles() {
+    try {
+      final executablePath = Platform.resolvedExecutable;
+      final appFolderPath = Directory(executablePath).parent.path;
+      final backupDir = Directory('$appFolderPath/database_backup');
+      if (!backupDir.existsSync()) return [];
+      final files = backupDir
+          .listSync()
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.zip'))
+          .toList();
+      // Sort by name descending (YYYYMMDD format = chronological)
+      files.sort((a, b) => b.path.compareTo(a.path));
+      // Take most recent 364 files
+      final limited = files.take(364).toList();
+      // Reverse to process oldest first (same as original alphabetical sort)
+      return limited.reversed.map((f) => f.path).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
   Future<void> _startDetection() async {
-    // Pick multiple backup files
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['zip'],
-      allowMultiple: true,
-    );
-
-    if (result == null || result.files.isEmpty) {
-      // User cancelled
-      return;
-    }
-
-    // Check file limit
-    if (result.files.length > 400) {
-      if (mounted) {
-        failureUserMessage(context,
-            'خطأ: يمكن اختيار 400 ملف كحد أقصى. تم اختيار ${result.files.length} ملف');
-      }
-      return;
-    }
-
-    // Get file paths
-    final filePaths = result.files
-        .where((file) => file.path != null)
-        .map((file) => file.path!)
-        .toList();
-
+    // Auto-load backup files from the known backup folder
+    final filePaths = _getBackupFiles();
     if (filePaths.isEmpty) {
       if (mounted) {
-        failureUserMessage(context, 'خطأ: لا يمكن الوصول إلى الملفات');
+        failureUserMessage(context, 'لا توجد ملفات نسخ احتياطية');
       }
       return;
     }
