@@ -40,6 +40,7 @@ import 'package:tablets/src/common/widgets/main_screen_list_cells.dart';
 import 'package:tablets/src/features/transactions/repository/transaction_db_cache_provider.dart';
 import 'package:tablets/src/features/transactions/model/transaction.dart';
 import 'package:tablets/src/features/transactions/view/transaction_show_form.dart';
+import 'package:tablets/src/features/transactions/printing/transactions_list_print.dart';
 
 class TransactionsScreen extends ConsumerWidget {
   const TransactionsScreen({super.key});
@@ -295,6 +296,11 @@ class TransactionsFloatingButtons extends ConsumerWidget {
             ref.read(counterRepositoryProvider).refreshCountersFromServer();
             ref.read(pageIsLoadingNotifier.notifier).state = false;
           },
+        ),
+        SpeedDialChild(
+          child: const Icon(Icons.print, color: Colors.white),
+          backgroundColor: iconsColor,
+          onTap: () => printFilteredTransactionsList(context, ref),
         ),
         if (!isAccountant)
           SpeedDialChild(

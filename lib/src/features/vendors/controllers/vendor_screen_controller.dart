@@ -20,10 +20,10 @@ final vendorScreenControllerProvider = Provider<VendorScreenController>((ref) {
   final transactionDbCache = ref.read(transactionDbCacheProvider.notifier);
   final screenDataNotifier = ref.read(vendorScreenDataNotifier.notifier);
   final vendorDbCache = ref.read(vendorDbCacheProvider.notifier);
-  return VendorScreenController(screenDataNotifier, transactionDbCache, vendorDbCache);
+  return VendorScreenController(
+      screenDataNotifier, transactionDbCache, vendorDbCache);
 });
 
-@override
 class VendorScreenController implements ScreenDataController {
   VendorScreenController(
     this._screenDataNotifier,
@@ -51,7 +51,8 @@ class VendorScreenController implements ScreenDataController {
   }
 
   @override
-  Map<String, dynamic> getItemScreenData(BuildContext context, Map<String, dynamic> vendorData) {
+  Map<String, dynamic> getItemScreenData(
+      BuildContext context, Map<String, dynamic> vendorData) {
     // below type conversion was needed when I converted from web to windows app
     if (vendorData['initialAmount'] is int) {
       vendorData['initialAmount'] = vendorData['initialAmount'].toDouble();
@@ -107,10 +108,11 @@ class VendorScreenController implements ScreenDataController {
     for (int i = 0; i < vendorTransactions.length; i++) {
       final transaction = Transaction.fromMap(vendorTransactions[i]);
       final transactionType = transaction.transactionType;
-      double amountSign = (transactionType == TransactionType.vendorReturn.name ||
-              transactionType == TransactionType.vendorReceipt.name)
-          ? -1
-          : 1;
+      double amountSign =
+          (transactionType == TransactionType.vendorReturn.name ||
+                  transactionType == TransactionType.vendorReceipt.name)
+              ? -1
+              : 1;
       final transactionAmount = transaction.totalAmount * amountSign;
       matchingTransactions.add([
         transaction,
@@ -127,6 +129,8 @@ class VendorScreenController implements ScreenDataController {
 
   double _getTotalDebt(List<List<dynamic>> matchingList, int amountIndex) {
     if (matchingList.isEmpty) return 0;
-    return matchingList.map((item) => item[amountIndex] as double).reduce((a, b) => a + b);
+    return matchingList
+        .map((item) => item[amountIndex] as double)
+        .reduce((a, b) => a + b);
   }
 }

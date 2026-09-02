@@ -1,3 +1,9 @@
 {
-    "cmake.sourceDirectory": "E:/kinton/tablets/linux"
+    "cmake.sourceDirectory": "E:/kinton/tablets/linux",
+    "python.analysis.exclude": [
+        "**/build/**",
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*"
+    ]
 }
