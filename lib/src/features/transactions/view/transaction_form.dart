@@ -554,7 +554,18 @@ class TransactionForm extends ConsumerWidget {
     // ignore: unawaited_futures
     formController
         .deleteItemFromDb(context, transaction, keepDialogOpen: true)
-        .catchError((e) {
+        .then((success) {
+      // deleteItem catches its own errors and returns false, so log it here
+      if (!success) {
+        ref.read(errorLogServiceProvider).logError(
+            itemData,
+            'delete_failed',
+            'delete',
+            formController.lastErrorMessage ??
+                'deleteItemFromDb returned false');
+      }
+      return success;
+    }).catchError((e) {
       errorPrint('Background delete failed: $e');
       ref.read(errorLogServiceProvider).logError(
           itemData, 'delete_failed', 'delete', e.toString());

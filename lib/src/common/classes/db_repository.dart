@@ -123,12 +123,19 @@ class DbRepository {
   Future<bool> deleteItem(BaseItem item) async {
     try {
       lastErrorMessage = null;
-      final querySnapshot = await _firestore
-          .collection(_collectionName)
-          .where(_dbReferenceKey, isEqualTo: item.dbRef)
-          .get(const GetOptions(source: Source.cache))
-          .timeout(const Duration(seconds: 30));
-      if (querySnapshot.docs.isNotEmpty) {
+      // If the cache query fails (e.g. times out), don't abort the delete -
+      // fall through to the direct doc(dbRef) delete below
+      QuerySnapshot<Map<String, dynamic>>? querySnapshot;
+      try {
+        querySnapshot = await _firestore
+            .collection(_collectionName)
+            .where(_dbReferenceKey, isEqualTo: item.dbRef)
+            .get(const GetOptions(source: Source.cache))
+            .timeout(const Duration(seconds: 30));
+      } catch (e) {
+        errorPrint('Cache query failed in deleteItem, using direct delete: $e');
+      }
+      if (querySnapshot != null && querySnapshot.docs.isNotEmpty) {
         await querySnapshot.docs.first.reference
             .delete()
             .timeout(const Duration(seconds: 30));
