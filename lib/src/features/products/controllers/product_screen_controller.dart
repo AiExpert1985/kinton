@@ -102,7 +102,7 @@ class ProductScreenController implements ScreenDataController {
   Map<String, dynamic> getItemScreenData(
       BuildContext context, Map<String, dynamic>? productData) {
     // If no product data is provided, we can't calculate anything.
-    if (productData == null) {
+    if (productData == null || productData.isEmpty) {
       // Return a map with a zero quantity to be safe.
       return {productQuantityKey: 0};
     }
