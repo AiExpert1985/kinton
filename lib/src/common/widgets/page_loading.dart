@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tablets/generated/l10n.dart';
+import 'package:tablets/src/common/values/constants.dart';
 import 'package:tablets/src/common/values/gaps.dart';
 
 class PageLoading extends ConsumerWidget {
@@ -25,6 +26,8 @@ class PageLoading extends ConsumerWidget {
             S.of(context).loading_data,
             style: const TextStyle(fontSize: 18),
           ),
+          VerticalGap.l,
+          const Text(appVersion, style: TextStyle(fontSize: 16)),
         ],
       ),
     );

@@ -125,7 +125,7 @@ class SettingsParameters extends ConsumerWidget {
               ),
             ),
             VerticalGap.xl,
-            const Text('version 0.80', style: TextStyle(fontSize: 8)),
+            const Text(appVersion, style: TextStyle(fontSize: 12)),
           ],
         ),
       ),

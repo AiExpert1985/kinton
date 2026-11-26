@@ -12,6 +12,7 @@ import 'package:tablets/src/common/providers/page_is_loading_notifier.dart';
 import 'package:tablets/src/common/providers/page_title_provider.dart';
 import 'package:tablets/src/common/providers/screen_cache_service.dart';
 import 'package:tablets/src/common/providers/user_info_provider.dart';
+import 'package:tablets/src/common/values/constants.dart';
 import 'package:tablets/src/common/values/gaps.dart';
 import 'package:tablets/src/common/widgets/circled_container.dart';
 import 'package:tablets/src/features/authentication/model/user_account.dart';
@@ -499,13 +500,17 @@ class MainDrawerHeader extends StatelessWidget {
               SizedBox(
                 // margin: const EdgeInsets.all(10),
                 width: double.infinity,
-                height: 200, // here I used width intentionally
+                height: 185, // here I used width intentionally
                 child: Image.asset('assets/images/logo.png',
                     fit: BoxFit.scaleDown),
               ),
               Text(
                 S.of(context).slogan,
                 style: const TextStyle(fontSize: 14, color: Colors.white),
+              ),
+              const Text(
+                appVersion,
+                style: TextStyle(fontSize: 12, color: Colors.white),
               ),
             ])));
   }
