@@ -126,6 +126,17 @@ class TransactionShowForm {
     // note here if transaction is null, it it equivalent to calling
     // formDataNotifier.intialize();
     formDataNotifier.initialize(initialData: transaction?.toMap());
+    // when the form is reloaded from its own in-memory data (edit, print, send to warehouse,
+    // delete item row), the items already end with an empty row, so we remove trailing empty
+    // rows first to avoid accumulating empty rows. (same criteria used by removeEmptyRows on save)
+    final loadedItems = formDataNotifier.getProperty(itemsKey);
+    if (loadedItems is List) {
+      while (loadedItems.isNotEmpty &&
+          loadedItems.last is Map &&
+          loadedItems.last[itemNameKey] == '') {
+        loadedItems.removeLast();
+      }
+    }
     // add empty row of items for both new forms & updating forms
     formDataNotifier.updateSubProperties(itemsKey, {
       itemCodeKey: null,

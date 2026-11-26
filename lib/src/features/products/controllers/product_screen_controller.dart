@@ -1,17 +1,18 @@
+import 'dart:collection';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tablets/src/common/classes/db_cache.dart';
+import 'package:tablets/src/common/functions/utils.dart';
 import 'package:tablets/src/common/interfaces/screen_controller.dart';
 import 'package:tablets/src/common/providers/screen_data_notifier.dart';
+import 'package:tablets/src/common/values/constants.dart';
 import 'package:tablets/src/common/values/features_keys.dart';
 import 'package:tablets/src/features/products/controllers/product_screen_data_notifier.dart';
-import 'package:tablets/src/features/products/repository/product_db_cache_provider.dart';
-import 'package:tablets/src/features/transactions/repository/transaction_db_cache_provider.dart';
-import 'package:tablets/src/common/classes/db_cache.dart';
-import 'package:flutter/material.dart';
-import 'package:tablets/src/common/functions/utils.dart';
-import 'package:tablets/src/common/values/constants.dart';
 import 'package:tablets/src/features/products/model/product.dart';
+import 'package:tablets/src/features/products/repository/product_db_cache_provider.dart';
 import 'package:tablets/src/features/transactions/model/transaction.dart';
-import 'dart:collection';
+import 'package:tablets/src/features/transactions/repository/transaction_db_cache_provider.dart';
 
 final productScreenControllerProvider =
     Provider<ProductScreenController>((ref) {

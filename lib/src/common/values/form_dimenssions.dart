@@ -1,5 +1,5 @@
 const double categoryFormWidth = 500;
-const double categoryFormHeight = 350;
+const double categoryFormHeight = 550;
 
 const double regionFormWidth = 500;
 const double regionFormHeight = 550;

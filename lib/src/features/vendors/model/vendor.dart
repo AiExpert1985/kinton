@@ -44,7 +44,7 @@ class Vendor implements BaseItem {
       imageUrls: List<String>.from(map['imageUrls']),
       phone: map['phone'] ?? '',
       initialDate: map['initialDate'] is Timestamp ? map['initialDate'].toDate() : map['initialDate'],
-      initialAmount: map['initialAmount'],
+      initialAmount: (map['initialAmount'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
